@@ -1,7 +1,5 @@
-<<<<<<< HEAD
 module cetus_amm::amm_swap {
-=======
-module cetus_amm::swap {
+
     use std::string;
     use std::error;
     use std::signer;
@@ -23,7 +21,7 @@ module cetus_amm::swap {
 
         locked_liquidity: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>,
 
-        protocol_fee_to: address,
+        protocol_fee_to: address
     }
 
 
@@ -86,7 +84,4 @@ module cetus_amm::swap {
     ) acquires Pool {
 
     }
-
-    
->>>>>>> 813519b281bd8450fca42eb7808cbe6854c445dc
 }
