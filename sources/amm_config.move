@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-module cetus_amm::amm_config {
-    
-=======
 module cetus_amm::config {
-    use std::string;
     use std::error;
     use std::signer;
 
@@ -11,7 +6,7 @@ module cetus_amm::config {
     // Errors
     //
 
-    const ECONFIG_NOT_HAS_PRIVILEGE: u64 = 1;
+    const ECONFIG_NOT_HAS_PRIVILEGE: u64 = 1001;
 
     struct PoolFeeConfig has key {
         trade_fee_numerator: u64,
@@ -32,9 +27,9 @@ module cetus_amm::config {
         protocol_fee_numerator: u64,
         protocol_fee_denominator: u64) acquires PoolFeeConfig {
 
-        assert_admin(account)
-
-        if (!exists<PoolFeeConfig>(account)) {
+        assert_admin(account);
+        let addr = signer::address_of(account);
+        if (!exists<PoolFeeConfig>(addr)) {
             move_to(account, PoolFeeConfig{
                 trade_fee_numerator,
                 trade_fee_denominator,
@@ -42,7 +37,7 @@ module cetus_amm::config {
                 protocol_fee_denominator,
             });
         } else {
-            let fee_config = &mut borrow_global_mut<PoolFeeConfig>(signer::address_of(account));
+            let fee_config = borrow_global_mut<PoolFeeConfig>(addr);
             fee_config.trade_fee_numerator = trade_fee_numerator;
             fee_config.trade_fee_denominator = trade_fee_denominator;
             fee_config.protocol_fee_numerator = protocol_fee_numerator;
@@ -55,12 +50,12 @@ module cetus_amm::config {
         account: &signer,
         pause: bool) acquires PoolPauseStatus {
 
-        assert_admin(account)
-
-        if (!exists<PoolPauseStatus>(account)) {
+        assert_admin(account);
+        let addr = signer::address_of(account);
+        if (!exists<PoolPauseStatus>(addr)) {
             move_to(account, PoolPauseStatus{ pause });
         } else {
-            let status = &mut borrow_global_mut<PoolPauseStatus>(signer::address_of(account));
+            let status = borrow_global_mut<PoolPauseStatus>(addr);
             status.pause = pause;
         }
     }
@@ -90,5 +85,4 @@ module cetus_amm::config {
     }
 
 
->>>>>>> 813519b281bd8450fca42eb7808cbe6854c445dc
 }
