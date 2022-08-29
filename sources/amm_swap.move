@@ -1,2 +1,2 @@
-module cetus_amm::swap {
+module cetus_amm::amm_swap {
 }

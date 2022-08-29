@@ -1,3 +1,3 @@
-module cetus_amm::math {
+module cetus_amm::amm_math {
     
 }

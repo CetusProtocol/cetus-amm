@@ -8,6 +8,3 @@ subdir = 'aptos-move/framework/aptos-framework'
 
 [addresses]
 cetus_amm = "0x1"
-
-[dev-addresses]
-cetus_amm = "0x1"
