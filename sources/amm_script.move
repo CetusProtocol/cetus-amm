@@ -1,5 +1,5 @@
 module cetus_amm::amm_script {
-    use cetus_amm::amm_config;
+    use cetus_amm::config;
     use cetus_amm::amm_swap;
     
     public entry fun init_fee_config() {
@@ -43,10 +43,7 @@ module cetus_amm::amm_script {
         amount_a_in: u128,
         amount_b_out_min: u128,
     ) {
-        amm_swap::swap_exact_token_for_token<CoinTypeA, CoinTypeB>(
-            &signer,
-            amount_a_in,
-            amount_b_out_min);
+        
     }
 
     public entry fun swap_token_for_exact_token<CoinTypeX, CoinTypeY>(
@@ -54,10 +51,7 @@ module cetus_amm::amm_script {
         amount_a_in_max: u128,
         amount_b_out: u128,
     ) {
-        amm_swap::swap_token_for_exact_token<CoinTypeX, CoinTypeY>(
-            &signer,
-            amount_a_in_max,
-            amount_b_out);
+        
     }
 
     public entry fun set_pause_status(status:bool) {
