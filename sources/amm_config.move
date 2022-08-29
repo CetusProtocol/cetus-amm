@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+module cetus_amm::amm_config {
+    
+=======
 module cetus_amm::config {
     use std::string;
     use std::error;
@@ -86,4 +90,5 @@ module cetus_amm::config {
     }
 
 
+>>>>>>> 813519b281bd8450fca42eb7808cbe6854c445dc
 }
