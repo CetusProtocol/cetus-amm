@@ -1,7 +1,6 @@
 module cetus_amm::utils {
     use std::error;
-    use std::bsc;
-    use aptos_framework::coin::{Self, Coin};
+    use aptos_framework::coin;
     use aptos_std::type_info;
     use aptos_std::comparator;
 
@@ -12,7 +11,7 @@ module cetus_amm::utils {
     const EUTIL_SWAP_COIN_NOT_EXISTS: u64 = 5001;
 
     public fun assert_is_coin<CoinType>() : bool {
-        assert!(is_coin_initialized<CoinType>(), error::invalid_argument(EUTIL_SWAP_COIN_NOT_EXISTS));
+        assert!(coin::is_coin_initialized<CoinType>(), error::invalid_argument(EUTIL_SWAP_COIN_NOT_EXISTS));
         true
     }
 
