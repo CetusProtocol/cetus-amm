@@ -68,7 +68,7 @@ module cetus_amm::amm_swap {
 
     struct AddLiquidityEvent has store, drop {
         liquidity: u128,
-        signer: address,
+        account: address,
         amount_a_desired: u128,
         amount_b_desired: u128,
         amount_a_min: u128,
@@ -77,7 +77,7 @@ module cetus_amm::amm_swap {
 
     struct RemoveLiquidityEvent has store, drop {
         liquidity: u128,
-        signer: address,
+        account: address,
         amount_a_min: u128,
         amount_b_min: u128,
     }
@@ -191,7 +191,7 @@ module cetus_amm::amm_swap {
     }
 
     fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
-        signer: &signer,
+        account: &signer,
         coinA: Coin<CoinTypeA>, 
         coinB: Coin<CoinTypeB>,
         amount_a_desired: u128,
@@ -202,7 +202,7 @@ module cetus_amm::amm_swap {
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
             liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
-            signer: signer::address_of(signer),
+            account: signer::address_of(account),
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
@@ -264,7 +264,7 @@ module cetus_amm::amm_swap {
 
 
     fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
-        signer: &signer,
+        account: &signer,
         to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
         amount_a_min: u128,
         amount_b_min: u128) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
@@ -273,7 +273,7 @@ module cetus_amm::amm_swap {
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
         event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
             liquidity,
-            signer: signer::address_of(signer),
+            account: signer::address_of(account),
             amount_a_min,
             amount_b_min,
         });
@@ -286,8 +286,8 @@ module cetus_amm::amm_swap {
         let reserveA = (coin::value(&pool.coin_a) as u128);
         let reserveB = (coin::value(&pool.coin_b) as u128);
         let total_supply = *option::borrow(&coin::supply<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>());
-        let amount0 = (to_burn_value * reserveA / total_supply as u64);
-        let amount1 = (to_burn_value * reserveB / total_supply as u64); 
+        let amount0 = (amm_math::safe_mul_div_u128(to_burn_value,reserveA,total_supply) as u64);
+        let amount1 = (amm_math::safe_mul_div_u128(to_burn_value,reserveB,total_supply) as u64); 
         assert!(amount0 > 0 && amount1 > 0, error::invalid_argument(ERROR_LIQUIDITY_SWAP_BURN_CALC_INVALID)); 
 
         coin::burn(to_burn, &pool.burn_capability);
