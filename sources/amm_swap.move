@@ -34,6 +34,7 @@ module cetus_amm::amm_swap {
     const ESWAP_B_OUT_LESSTHAN_EXPECTED: u64 = 4011;
     const ESWAP_INVALID_COIN_PAIR: u64 = 4012;
     const ESWAP_A_IN_OVER_LIMIT_MAX: u64 = 4013;
+    const ERROR_POOL_DOES_NOT_EXIST: u64 = 4014;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
@@ -174,6 +175,9 @@ module cetus_amm::amm_swap {
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
+
+        assert!(exists<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()), error::invalid_argument(ERROR_POOL_DOES_NOT_EXIST));
+
         let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
             amount_a_desired,
             amount_b_desired,
