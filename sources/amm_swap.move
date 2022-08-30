@@ -142,6 +142,9 @@ module cetus_amm::amm_swap {
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
+
+        amm_config::assert_pause();
+
         let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
             !comparator::is_equal(&order),  
@@ -273,6 +276,9 @@ module cetus_amm::amm_swap {
         liquidity: u128,
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool,PoolSwapEventHandle {
+
+        amm_config::assert_pause();
+
         let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
             !comparator::is_equal(&order),  
