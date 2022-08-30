@@ -532,10 +532,17 @@ module cetus_amm::amm_swap {
     }
 
     public fun get_reserves<CoinTypeA, CoinTypeB>(): (u128, u128) acquires Pool {
-        let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        let a_reserve = (coin::value(&pool.coin_a) as u128);
-        let b_reserve = (coin::value(&pool.coin_b) as u128);
-        (a_reserve, b_reserve)
+         if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+            let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
+            let a_reserve = (coin::value(&pool.coin_a) as u128);
+            let b_reserve = (coin::value(&pool.coin_b) as u128);
+            (a_reserve, b_reserve)
+         } else {
+            let pool = borrow_global<Pool<CoinTypeB, CoinTypeA>>(amm_config::admin_address());
+            let a_reserve = (coin::value(&pool.coin_a) as u128);
+            let b_reserve = (coin::value(&pool.coin_b) as u128);
+            (b_reserve, a_reserve)
+         }
     }
 
     public fun calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>() : (u128, u128) {
@@ -546,30 +553,14 @@ module cetus_amm::amm_swap {
 
     public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128): u128 acquires Pool{
         let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
-
-        let amount_out;
-        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
-            let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-            amount_out = get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
-        } else {
-            let (reserve_b, reserve_a) = get_reserves<CoinTypeB, CoinTypeA>();
-            amount_out = get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
-        };
-        amount_out
+        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
+        get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
     }
 
     public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128): u128 acquires Pool {
         let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
-
-        let amount_in;
-        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
-            let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-            amount_in = get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
-        } else {
-            let (reserve_b, reserve_a) = get_reserves<CoinTypeB, CoinTypeA>();
-            amount_in = get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
-        };
-        amount_in
+        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
+        get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
     }
 
     public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>) acquires PoolSwapEventHandle, Pool {

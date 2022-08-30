@@ -90,6 +90,4 @@ module cetus_amm::amm_config {
             !get_pool_pause(),
             error::invalid_argument(ECONFIG_POOL_PAUSE));
     }
-
-
 }
