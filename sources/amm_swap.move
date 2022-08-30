@@ -9,8 +9,8 @@ module cetus_amm::amm_swap {
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
     use aptos_framework::coins;
     use aptos_std::comparator;
-    use cetus_amm::utils::{Self, assert_is_coin, compare_coin, get_amount_out, get_amount_in};
-    use cetus_amm::config::{Self, assert_admin};
+    use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin, get_amount_out, get_amount_in};
+    use cetus_amm::amm_config::{Self, assert_admin};
     use cetus_amm::amm_math::{Self, quote, sqrt, min};
     use aptos_std::type_info;
 
@@ -52,12 +52,6 @@ module cetus_amm::amm_swap {
 
         protocol_fee_to: address
     }
-
-    struct LiquidityTokenCapability<phantom X, phantom Y> has key, store {
-        mint: MintCapability<PoolLiquidityCoin<X, Y>>,
-        burn: BurnCapability<PoolLiquidityCoin<X, Y>>,
-    }
-
 
     struct InitPoolEvent has store, drop {
         coin_a_info: type_info::TypeInfo,
@@ -229,7 +223,7 @@ module cetus_amm::amm_swap {
         amount_a_min: u128,
         amount_b_min: u128): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
         let liquidity_token = mint<CoinTypeA, CoinTypeB>(coinA,coinB);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
+        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
             liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
             account: signer::address_of(account),
@@ -249,7 +243,7 @@ module cetus_amm::amm_swap {
 
         let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
 
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
 
         // get deposited amounts
         let amountA = (coin::value(&coinA) as u128);
@@ -324,7 +318,7 @@ module cetus_amm::amm_swap {
         amount_b_min: u128) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
         let liquidity = (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&to_burn) as u128);
         let (a_token, b_token) = burn<CoinTypeA, CoinTypeB>(to_burn);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
+        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
             liquidity,
             account: signer::address_of(account),
@@ -338,7 +332,7 @@ module cetus_amm::amm_swap {
 
     fun burn<CoinTypeA, CoinTypeB>(to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>): (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool {
         let to_burn_value = (coin::value(&to_burn) as u128);
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
         let reserveA = (coin::value(&pool.coin_a) as u128);
         let reserveB = (coin::value(&pool.coin_b) as u128);
         let total_supply = *option::borrow(&coin::supply<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>());
@@ -359,7 +353,7 @@ module cetus_amm::amm_swap {
         coin_a_out: u128
     ) :(Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
         let (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap<CoinTypeA, CoinTypeB>(coin_a_in, coin_b_out, coin_b_in, coin_a_out);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
+        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<SwapEvent>(
             &mut event_handle.swap_events,
             SwapEvent {
@@ -379,7 +373,7 @@ module cetus_amm::amm_swap {
         coin_b_in: Coin<CoinTypeB>,
         coin_a_out: u128, 
     ): (Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool{
-        config::assert_pause();
+        amm_config::assert_pause();
 
         let a_in_value = coin::value(&coin_a_in);
         let b_in_value = coin::value(&coin_b_in);
@@ -388,7 +382,7 @@ module cetus_amm::amm_swap {
             error::invalid_argument(ESWAP_COIN_INSUFFICIENT));
 
         let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>();
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
         coin::merge(&mut pool.coin_a, coin_a_in);
         coin::merge(&mut pool.coin_b, coin_b_in);
 
@@ -397,7 +391,7 @@ module cetus_amm::amm_swap {
         {
             let a_reserve_new = coin::value(&pool.coin_a);
             let b_reserve_new = coin::value(&pool.coin_b);
-            let (fee_numerator, fee_denominator) = config::get_trade_fee();
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
             
             let a_adjusted = (a_reserve_new as u128) * (fee_denominator as u128) - (a_in_value as u128) * (fee_numerator as u128);
             let b_adjusted = (b_reserve_new as u128) * (fee_denominator as u128) - (b_in_value as u128) * (fee_numerator as u128);
@@ -525,7 +519,7 @@ module cetus_amm::amm_swap {
         account: &signer,
         protocol_fee_to: address
     ) acquires PoolSwapEventHandle {
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
+        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<InitPoolEvent>(
             &mut event_handle.init_pool_events,
             InitPoolEvent {
@@ -538,32 +532,47 @@ module cetus_amm::amm_swap {
     }
 
     public fun get_reserves<CoinTypeA, CoinTypeB>(): (u128, u128) acquires Pool {
-        let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+        let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
         let a_reserve = (coin::value(&pool.coin_a) as u128);
         let b_reserve = (coin::value(&pool.coin_b) as u128);
         (a_reserve, b_reserve)
     }
 
     public fun calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>() : (u128, u128) {
-        let (fee_numerator, fee_denominator) = config::get_trade_fee();
-        let (protocol_fee_numberator, protocol_fee_denominator) = config::get_protocol_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (protocol_fee_numberator, protocol_fee_denominator) = amm_config::get_protocol_fee();
          ((fee_numerator * protocol_fee_numberator as u128), (fee_denominator * protocol_fee_denominator as u128))
     }
 
     public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128): u128 acquires Pool{
-        let (fee_numerator, fee_denominator) = config::get_trade_fee();
-        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-        get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+
+        let amunt_out;
+        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+            let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
+            amunt_out = get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+        } else {
+            let (reserve_b, reserve_a) = get_reserves<CoinTypeB, CoinTypeA>();
+            amunt_out = get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+        }
+        amunt_out
     }
 
     public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128): u128 acquires Pool {
-        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
         let (fee_numerator, fee_denominator) = config::get_trade_fee();
-        get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+
+        let amount_in;
+        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+            let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
+            amount_in = get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+        } else {
+            let (reserve_b, reserve_a) = get_reserves<CoinTypeB, CoinTypeA>();
+            amount_in = get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+        }
     }
 
     public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>) acquires PoolSwapEventHandle, Pool {
-         let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+         let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
         intra_handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address, pool.protocol_fee_to, token_a);
     }
 
@@ -612,7 +621,7 @@ module cetus_amm::amm_swap {
         a_in: coin::Coin<CoinTypeA>,
         b_in: coin::Coin<CoinTypeB>,
     ) acquires Pool {
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(config::admin_address());
+        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
         coin::merge(&mut pool.coin_a, a_in);
         coin::merge(&mut pool.coin_b, b_in);
     }
@@ -622,7 +631,7 @@ module cetus_amm::amm_swap {
         fee_address: address,
         fee_out: u128
     ) acquires PoolSwapEventHandle {
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(config::admin_address());
+        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<SwapFeeEvent>(
             &mut event_handle.swap_fee_events,
             SwapFeeEvent {

@@ -1,4 +1,4 @@
-module cetus_amm::config {
+module cetus_amm::amm_config {
     use std::error;
     use std::signer;
 

@@ -1,5 +1,5 @@
 module cetus_amm::amm_script {
-    use cetus_amm::config;
+    use cetus_amm::amm_config;
     use cetus_amm::amm_swap;
     
     public entry fun set_pool_fee_config(
@@ -9,20 +9,18 @@ module cetus_amm::amm_script {
         protocol_fee_numerator: u64,
         protocol_fee_denominator: u64
     ) {
-        config::set_pool_fee_config(
+        amm_config::set_pool_fee_config(
             &account,
             trade_fee_numerator,
             trade_fee_denominator,
             protocol_fee_numerator,
-            protocol_fee_denominator,
-        )
+            protocol_fee_denominator);
     }
 
     public entry fun init_pool<CoinTypeA, CoinTypeB>(account: signer,  protocol_fee_to: address) {
         amm_swap::init_pool<CoinTypeA, CoinTypeB> (
             &account,
-            protocol_fee_to,     
-        )
+            protocol_fee_to);
     }
 
     /// Add liquidity for user
@@ -61,8 +59,7 @@ module cetus_amm::amm_script {
         amm_swap::swap_exact_coin_for_coin<CoinTypeA, CoinTypeB> (
             &account,
             amount_a_in,
-            amount_b_out_min,
-        )
+            amount_b_out_min);
     }
 
     public entry fun swap_coin_for_exact_coin<CoinTypeA, CoinTypeB>(
@@ -73,11 +70,10 @@ module cetus_amm::amm_script {
         amm_swap::swap_coin_for_exact_coin<CoinTypeA, CoinTypeB> (
             &account,
             amount_a_in_max,
-            amount_b_out,
-        )
+            amount_b_out);
     }
 
     public entry fun set_pause_status(account: signer, pause:bool) {
-        config::set_pool_pause(&account, pause)
+        amm_config::set_pool_pause(&account, pause);
     }
 }

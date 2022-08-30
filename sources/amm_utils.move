@@ -1,4 +1,4 @@
-module cetus_amm::utils {
+module cetus_amm::amm_utils {
     use std::error;
     use aptos_framework::coin;
     use aptos_std::type_info;
