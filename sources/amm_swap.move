@@ -15,7 +15,7 @@ module cetus_amm::amm_swap {
     use aptos_std::type_info;
 
 
-    const MINIMUM_LIQUIDITY: u64 = 1000;
+    const MINIMUM_LIQUIDITY: u128 = 1000;
 
     //
     // Errors
@@ -148,9 +148,35 @@ module cetus_amm::amm_swap {
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
+        let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
-            comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>()),  
+            !comparator::is_equal(&order),  
             error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
+        if (comparator::is_smaller_than(&order)) {
+            intra_add_liquidity<CoinTypeA, CoinTypeB>(
+                account,
+                amount_a_desired,
+                amount_b_desired,
+                amount_a_min,
+                amount_b_min,
+            );
+        } else {
+            intra_add_liquidity<CoinTypeB, CoinTypeA>(
+                account,
+                amount_b_desired,
+                amount_a_desired,
+                amount_b_min,
+                amount_a_min,
+            );
+        }
+    }
+
+    fun intra_add_liquidity<CoinTypeA, CoinTypeB>(
+        account: &signer,
+        amount_a_desired: u128,
+        amount_b_desired: u128,
+        amount_a_min: u128,
+        amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
         let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
             amount_a_desired,
             amount_b_desired,
@@ -230,13 +256,14 @@ module cetus_amm::amm_swap {
         let amountB = (coin::value(&coinB) as u128);
 
         let total_supply = (*option::borrow(&coin::supply<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>()) as u128);
-        let liquidity;
+        let liquidity : u128;
         if (total_supply == 0) {
-            liquidity = (sqrt(amountA * amountB) as u64) - MINIMUM_LIQUIDITY;
-            let locked_liquidity = coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(MINIMUM_LIQUIDITY, &pool.mint_capability); // permanently lock the first MINIMUM_LIQUIDITY tokens
+            liquidity = sqrt(amountA * amountB) - MINIMUM_LIQUIDITY;
+            let locked_liquidity = coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>((MINIMUM_LIQUIDITY as u64), &pool.mint_capability); // permanently lock the first MINIMUM_LIQUIDITY tokens
             coin::merge(&mut pool.locked_liquidity, locked_liquidity);
         } else {
-            liquidity = (min(amountA * total_supply / reserve_a, amountB * total_supply / reserve_b) as u64);
+            liquidity = min(amm_math::safe_mul_div_u128(amountA,total_supply,reserve_a), 
+                            amm_math::safe_mul_div_u128(amountB,total_supply,reserve_b));
         };
 
         assert!(liquidity > 0, error::invalid_argument(ERROR_LIQUIDITY_INSUFFICIENT_MINTED));
@@ -244,7 +271,7 @@ module cetus_amm::amm_swap {
         coin::merge(&mut pool.coin_a, coinA);
         coin::merge(&mut pool.coin_b, coinB);
 
-        coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(liquidity, &pool.mint_capability)
+        coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>((liquidity as u64), &pool.mint_capability)
     }
 
     public fun remove_liquidity<CoinTypeA, CoinTypeB>(
@@ -252,9 +279,30 @@ module cetus_amm::amm_swap {
         liquidity: u128,
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool,PoolSwapEventHandle {
+        let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
-            comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>()),  
+            !comparator::is_equal(&order),  
             error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
+        if (comparator::is_smaller_than(&order)) {
+            intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+                account,
+                liquidity,
+                amount_a_min,
+                amount_b_min);
+        } else {
+            intra_remove_liquidity<CoinTypeB, CoinTypeA>(
+                account,
+                liquidity,
+                amount_b_min,
+                amount_a_min);
+        }
+    }
+
+    fun intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+        account: &signer,
+        liquidity: u128,
+        amount_a_min: u128,
+        amount_b_min: u128) acquires Pool,PoolSwapEventHandle {
         let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
         let (token_a, token_b) = burn_and_emit_event(
             account,
