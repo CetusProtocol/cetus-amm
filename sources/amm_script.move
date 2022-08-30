@@ -2,12 +2,27 @@ module cetus_amm::amm_script {
     use cetus_amm::config;
     use cetus_amm::amm_swap;
     
-    public entry fun init_fee_config() {
-
+    public entry fun set_pool_fee_config(
+        account: signer,
+        trade_fee_numerator: u64,
+        trade_fee_denominator: u64,
+        protocol_fee_numerator: u64,
+        protocol_fee_denominator: u64
+    ) {
+        config::set_pool_fee_config(
+            &account,
+            trade_fee_numerator,
+            trade_fee_denominator,
+            protocol_fee_numerator,
+            protocol_fee_denominator,
+        )
     }
 
-    public entry fun register_pool<CoinTypeA, CoinTypeB>(account: signer) {
-
+    public entry fun init_pool<CoinTypeA, CoinTypeB>(account: signer,  protocol_fee_to: address) {
+        amm_swap::init_pool<CoinTypeA, CoinTypeB> (
+            &account,
+            protocol_fee_to,     
+        )
     }
 
     /// Add liquidity for user
@@ -38,23 +53,31 @@ module cetus_amm::amm_script {
             amount_b_min);
     }
 
-    public entry fun swap_exact_token_for_token<CoinTypeA, CoinTypeB>(
+    public entry fun swap_exact_coin_for_coin<CoinTypeA, CoinTypeB>(
         signer: signer,
         amount_a_in: u128,
         amount_b_out_min: u128,
     ) {
-        
+        amm_swap::swap_exact_coin_for_coin<CoinTypeA, CoinTypeB> (
+            &signer,
+            amount_a_in,
+            amount_b_out_min,
+        )
     }
 
-    public entry fun swap_token_for_exact_token<CoinTypeX, CoinTypeY>(
+    public entry fun swap_coin_for_exact_coin<CoinTypeA, CoinTypeB>(
         signer: signer,
         amount_a_in_max: u128,
         amount_b_out: u128,
     ) {
-        
+        amm_swap::swap_coin_for_exact_coin<CoinTypeA, CoinTypeB> (
+            &signer,
+            amount_a_in_max,
+            amount_b_out,
+        )
     }
 
-    public entry fun set_pause_status(status:bool) {
-
+    public entry fun set_pause_status(account: signer, pause:bool) {
+        config::set_pool_pause(&account, pause)
     }
 }

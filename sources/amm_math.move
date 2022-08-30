@@ -11,7 +11,7 @@ module cetus_amm::amm_math {
     public fun safe_compare_mul_u128(a1: u128, b1: u128, a2: u128, b2: u128): u8 {
         let left = u256::mul(u256::from_u128(a1), u256::from_u128(b1));
         let right = u256::mul(u256::from_u128(a2), u256::from_u128(b2));
-        u256::compare(left, right)
+        u256::compare(&left, &right)
     }
 
     public fun safe_mul_div_u128(x: u128, y: u128, z: u128): u128 {
