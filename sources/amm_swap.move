@@ -69,6 +69,8 @@ module cetus_amm::amm_swap {
     struct AddLiquidityEvent has store, drop {
         liquidity: u128,
         account: address,
+        coin_a_info: type_info::TypeInfo,
+        coin_b_info: type_info::TypeInfo,
         amount_a_desired: u128,
         amount_b_desired: u128,
         amount_a_min: u128,
@@ -78,6 +80,8 @@ module cetus_amm::amm_swap {
     struct RemoveLiquidityEvent has store, drop {
         liquidity: u128,
         account: address,
+        coin_a_info: type_info::TypeInfo,
+        coin_b_info: type_info::TypeInfo,
         amount_a_min: u128,
         amount_b_min: u128,
     }
@@ -203,6 +207,8 @@ module cetus_amm::amm_swap {
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
             liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
             account: signer::address_of(account),
+            coin_a_info:type_info::type_of<CoinTypeA>(),
+            coin_b_info:type_info::type_of<CoinTypeB>(),
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
@@ -274,6 +280,8 @@ module cetus_amm::amm_swap {
         event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
             liquidity,
             account: signer::address_of(account),
+            coin_a_info:type_info::type_of<CoinTypeA>(),
+            coin_b_info:type_info::type_of<CoinTypeB>(),
             amount_a_min,
             amount_b_min,
         });
