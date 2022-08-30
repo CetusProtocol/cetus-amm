@@ -120,21 +120,31 @@ module cetus_amm::amm_swap {
 
         //compare coins
         assert!(
-            comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>()),  
+            !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
             error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
 
+        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+            intra_init_pool<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
+        } else {
+            intra_init_pool<CoinTypeB, CoinTypeA>(account, protocol_fee_to);
+        }
+    }
+
+    public fun intra_init_pool<CoinTypeA, CoinTypeB>(
+        account: &signer, protocol_fee_to: address
+    ) acquires PoolSwapEventHandle {
         //reigister lp coin
-        let(burn_capability, mint_capability) = register_liquidity_coin<CoinTypeA, CoinTypeB>(account);
+            let(burn_capability, mint_capability) = register_liquidity_coin<CoinTypeA, CoinTypeB>(account);
         
-        //make pool
-        let pool = make_pool<CoinTypeA, CoinTypeB>(protocol_fee_to, burn_capability, mint_capability);
-        move_to(account, pool);
+            //make pool
+            let pool = make_pool<CoinTypeA, CoinTypeB>(protocol_fee_to, burn_capability, mint_capability);
+            move_to(account, pool);
 
-        //init event handle
-        init_event_handle(account);
+            //init event handle
+            init_event_handle(account);
 
-        //emit init pool event
-        emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
+            //emit init pool event
+            emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
     }
 
     public fun add_liquidity<CoinTypeA, CoinTypeB>(
