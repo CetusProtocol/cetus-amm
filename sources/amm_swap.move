@@ -9,7 +9,7 @@ module cetus_amm::amm_swap {
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
     use aptos_framework::coins;
     use aptos_std::comparator;
-    use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin, get_amount_out, get_amount_in};
+    use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin};
     use cetus_amm::amm_config::{Self, assert_admin};
     use cetus_amm::amm_math::{Self, quote, sqrt, min};
     use aptos_std::type_info;
@@ -31,8 +31,6 @@ module cetus_amm::amm_swap {
     const ELIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4008;
     const ECOIN_INSUFFICIENT: u64 = 4009;
     const ESWAPOUT_CALC_INVALID: u64 = 4010;
-    const ESWAP_B_OUT_LESSTHAN_EXPECTED: u64 = 4011;
-    const ESWAP_A_IN_OVER_LIMIT_MAX: u64 = 4012;
     const EPOOL_DOES_NOT_EXIST: u64 = 4013;
 
     const EQUAL: u8 = 0;
@@ -117,33 +115,18 @@ module cetus_amm::amm_swap {
              account::exists_at(protocol_fee_to),
              error::not_found(EACCOUNT_NOT_EXISTED));
 
-        //compare coins
-        assert!(
-            !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::internal(EINVALID_COIN_PAIR));
-
-        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
-            intra_init_pool<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
-        } else {
-            intra_init_pool<CoinTypeB, CoinTypeA>(account, protocol_fee_to);
-        }
-    }
-
-    public fun intra_init_pool<CoinTypeA, CoinTypeB>(
-        account: &signer, protocol_fee_to: address
-    ) acquires PoolSwapEventHandle {
-        //reigister lp coin
-            let(burn_capability, mint_capability) = register_liquidity_coin<CoinTypeA, CoinTypeB>(account);
+         //reigister lp coin
+        let(burn_capability, mint_capability) = register_liquidity_coin<CoinTypeA, CoinTypeB>(account);
         
-            //make pool
-            let pool = make_pool<CoinTypeA, CoinTypeB>(protocol_fee_to, burn_capability, mint_capability);
-            move_to(account, pool);
+        //make pool
+        let pool = make_pool<CoinTypeA, CoinTypeB>(protocol_fee_to, burn_capability, mint_capability);
+        move_to(account, pool);
 
-            //init event handle
-            init_event_handle(account);
+        //init event handle
+        init_event_handle(account);
 
-            //emit init pool event
-            emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
+        //emit init pool event
+        emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
     }
 
     public fun add_liquidity<CoinTypeA, CoinTypeB>(
@@ -428,70 +411,6 @@ module cetus_amm::amm_swap {
         (coin_a_swapped, coin_b_swapped, a_swap_fee, b_swap_fee)
     }
 
-    public fun swap_exact_coin_for_coin<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        amount_a_in: u128,
-        amount_b_out_min: u128,
-    )  acquires Pool, PoolSwapEventHandle {
-         assert!(
-            !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::invalid_argument(EINVALID_COIN_PAIR));
-
-        let sender = signer::address_of(account);
-        if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
-
-        let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in);
-        assert!(b_out >= amount_b_out_min, 
-            error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
-
-        let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
-        let (coin_a_out, coin_b_out);
-        let (coin_a_fee, coin_b_fee);
-        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, b_out, coin::zero(), 0);
-        } else {
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, b_out);
-        };
-
-        coin::destroy_zero(coin_a_out);
-        coin::deposit(sender, coin_b_out);
-        coin::destroy_zero(coin_b_fee);
-
-        handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee);
-    }
-
-    public fun swap_coin_for_exact_coin<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        amount_a_in_max: u128,
-        amount_b_out: u128
-    ) acquires Pool, PoolSwapEventHandle {
-         assert!(
-            !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::invalid_argument(EINVALID_COIN_PAIR));
-
-        let sender = signer::address_of(account);
-        if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
-
-        let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out);
-        assert!(a_in <= amount_a_in_max, 
-            error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
-
-        let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
-        let (coin_a_out, coin_b_out);
-        let (coin_a_fee, coin_b_fee);
-        if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, amount_b_out, coin::zero(), 0);
-        } else {
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_b_out);
-        };
-
-        coin::destroy_zero(coin_a_out);
-        coin::deposit(sender, coin_b_out);
-        coin::destroy_zero(coin_b_fee);
-
-        handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee);
-    }
-
     fun make_pool<CoinTypeA, CoinTypeB>(
         protocol_fee_to: address,
         burn_capability: BurnCapability<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
@@ -568,18 +487,6 @@ module cetus_amm::amm_swap {
         let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
         let (protocol_fee_numberator, protocol_fee_denominator) = amm_config::get_protocol_fee();
          ((fee_numerator * protocol_fee_numberator as u128), (fee_denominator * protocol_fee_denominator as u128))
-    }
-
-    public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128): u128 acquires Pool{
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
-        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-        get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
-    }
-
-    public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128): u128 acquires Pool {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
-        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-        get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
     }
 
     public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>) acquires PoolSwapEventHandle, Pool {
