@@ -61,24 +61,24 @@ module cetus_amm::amm_script {
             amount_b_out_min);
     }
 
-    public entry fun swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeB, CoinTypeC>(
+    public entry fun swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
         account: signer,
         amount_a_in: u128,
         amount_b_out_min: u128
     ) {
-        amm_router::swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeB, CoinTypeC> (
+        amm_router::swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB> (
             &account,
             amount_a_in,
             amount_b_out_min
         );
     }
 
-    public entry fun swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeB, CoinTypeC, CoinTypeD>(
+    public entry fun swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(
         account: signer,
         amount_a_in: u128,
         amount_b_out_min: u128
     ) {
-        amm_router::swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeB, CoinTypeC, CoinTypeD> (
+        amm_router::swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB> (
             &account,
             amount_a_in,
             amount_b_out_min
@@ -96,23 +96,23 @@ module cetus_amm::amm_script {
             amount_b_out);
     }
 
-    public entry fun swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeB, CoinTypeC>(
+    public entry fun swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
         account: signer,
         amount_a_in_max: u128,
         amount_b_out: u128,
     ) {
-        amm_router::swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeB, CoinTypeC> (
+        amm_router::swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB> (
             &account,
             amount_a_in_max,
             amount_b_out);
     }
 
-    public entry fun swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeB, CoinTypeC, CoinTypeD>(
+    public entry fun swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(
         account: signer,
         amount_a_in_max: u128,
         amount_b_out: u128
     ) {
-        amm_router::swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeB, CoinTypeC, CoinTypeD> (
+        amm_router::swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB> (
             &account,
             amount_a_in_max,
             amount_b_out,
