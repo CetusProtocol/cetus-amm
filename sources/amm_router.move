@@ -68,7 +68,7 @@ module cetus_amm::amm_router {
             !comparator::is_equal(&order),  
             error::internal(EINVALID_COIN_PAIR));
         if (comparator::is_smaller_than(&order)) {
-            intra_add_liquidity<CoinTypeA, CoinTypeB>(
+            add_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
                 amount_a_desired,
                 amount_b_desired,
@@ -76,7 +76,7 @@ module cetus_amm::amm_router {
                 amount_b_min,
             );
         } else {
-            intra_add_liquidity<CoinTypeB, CoinTypeA>(
+            add_liquidity_internal<CoinTypeB, CoinTypeA>(
                 account,
                 amount_b_desired,
                 amount_a_desired,
@@ -86,13 +86,13 @@ module cetus_amm::amm_router {
         }
     }
 
-    fun intra_add_liquidity<CoinTypeA, CoinTypeB>(
+    fun add_liquidity_internal<CoinTypeA, CoinTypeB>(
         account: &signer,
         amount_a_desired: u128,
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
+        let (amount_a, amount_b) = calculate_amount_for_liquidity_internal<CoinTypeA, CoinTypeB>(
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
@@ -113,7 +113,7 @@ module cetus_amm::amm_router {
         coin::deposit(sender,liquidity_token);
     }
 
-    fun intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
+    fun calculate_amount_for_liquidity_internal<CoinTypeA, CoinTypeB>(
         amount_a_desired: u128,
         amount_b_desired: u128,
         amount_a_min: u128,
@@ -148,13 +148,13 @@ module cetus_amm::amm_router {
             !comparator::is_equal(&order),  
             error::internal(EINVALID_COIN_PAIR));
         if (comparator::is_smaller_than(&order)) {
-            intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+            remove_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
                 liquidity,
                 amount_a_min,
                 amount_b_min);
         } else {
-            intra_remove_liquidity<CoinTypeB, CoinTypeA>(
+            remove_liquidity_internal<CoinTypeB, CoinTypeA>(
                 account,
                 liquidity,
                 amount_b_min,
@@ -162,7 +162,7 @@ module cetus_amm::amm_router {
         }
     }
 
-    fun intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+    fun remove_liquidity_internal<CoinTypeA, CoinTypeB>(
         account: &signer,
         liquidity: u128,
         amount_a_min: u128,

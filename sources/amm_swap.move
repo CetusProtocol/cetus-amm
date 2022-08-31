@@ -7,7 +7,6 @@ module cetus_amm::amm_swap {
     use aptos_framework::account;
     use aptos_std::event::{Self, EventHandle};
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
-    use aptos_framework::coins;
     use aptos_std::comparator;
     use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin};
     use cetus_amm::amm_config::{Self, assert_admin};
@@ -27,7 +26,6 @@ module cetus_amm::amm_swap {
     const ELIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4004;
     const ECOIN_INSUFFICIENT: u64 = 4005;
     const ESWAPOUT_CALC_INVALID: u64 = 4006;
-    const EPOOL_DOES_NOT_EXIST: u64 = 4007;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
@@ -357,10 +355,10 @@ module cetus_amm::amm_swap {
 
     public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>) acquires PoolSwapEventHandle, Pool {
          let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        intra_handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address, pool.protocol_fee_to, token_a);
+        handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(signer_address, pool.protocol_fee_to, token_a);
     }
 
-    fun intra_handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(
+    fun handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(
         signer_address: address,
         fee_address: address,
         coin_a: Coin<CoinTypeA>
