@@ -5,7 +5,6 @@ module cetus_amm::amm_router {
     use cetus_amm::amm_swap::{PoolLiquidityCoin,Self};
     use cetus_amm::amm_utils;
     use aptos_framework::coin;
-    use aptos_framework::coins;
     use aptos_std::comparator;
     use cetus_amm::amm_math::{Self, quote};
 
@@ -109,7 +108,7 @@ module cetus_amm::amm_router {
                 amount_b_min);
         assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
         let sender = signer::address_of(account);
-        if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coins::register_internal<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
+        if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coin::register<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
         coin::deposit(sender,liquidity_token);
     }
 
@@ -190,7 +189,7 @@ module cetus_amm::amm_router {
             error::invalid_argument(EINVALID_COIN_PAIR));
         
         let sender = signer::address_of(account);
-        if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
+        if (!coin::is_account_registered<CoinTypeB>(sender)) coin::register<CoinTypeB>(account);
         let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in);
         assert!(b_out >= amount_b_out_min, 
             error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
@@ -263,7 +262,7 @@ module cetus_amm::amm_router {
             error::invalid_argument(EINVALID_COIN_PAIR));
 
         let sender = signer::address_of(account);
-        if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
+        if (!coin::is_account_registered<CoinTypeB>(sender)) coin::register<CoinTypeB>(account);
         let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out);
         assert!(a_in <= amount_a_in_max, 
             error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));

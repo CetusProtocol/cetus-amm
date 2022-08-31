@@ -1,6 +1,7 @@
 module cetus_amm::amm_script {
     use cetus_amm::amm_router;
     
+    #[cmd]
     public entry fun set_pool_fee_config(
         account: signer,
         trade_fee_numerator: u64,
@@ -16,6 +17,7 @@ module cetus_amm::amm_script {
             protocol_fee_denominator);
     }
 
+    #[cmd]
     public entry fun init_pool<CoinTypeA, CoinTypeB>(account: signer,  protocol_fee_to: address) {
         amm_router::init_pool<CoinTypeA, CoinTypeB> (
             &account,
@@ -23,6 +25,7 @@ module cetus_amm::amm_script {
     }
 
     /// Add liquidity for user
+    #[cmd]
     public entry fun add_liquidity<CoinTypeA, CoinTypeB>(
         account: signer,
         amount_a_desired: u128,
@@ -38,6 +41,7 @@ module cetus_amm::amm_script {
     }
 
     /// Remove liquidity for user
+    #[cmd]
     public entry fun remove_liquidity<CoinTypeA, CoinTypeB>(
         account: signer,
         liquidity: u128,
@@ -50,6 +54,7 @@ module cetus_amm::amm_script {
             amount_b_min);
     }
 
+    #[cmd]
     public entry fun swap_exact_coin_for_coin<CoinTypeA, CoinTypeB>(
         account: signer,
         amount_a_in: u128,
@@ -61,6 +66,7 @@ module cetus_amm::amm_script {
             amount_b_out_min);
     }
 
+    #[cmd]
     public entry fun swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
         account: signer,
         amount_a_in: u128,
@@ -72,6 +78,7 @@ module cetus_amm::amm_script {
             amount_b_out_min);
     }
 
+    #[cmd]
     public entry fun swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(
         account: signer,
         amount_a_in: u128,
@@ -83,6 +90,7 @@ module cetus_amm::amm_script {
             amount_b_out_min);
     }
 
+    #[cmd]
     public entry fun swap_coin_for_exact_coin<CoinTypeA, CoinTypeB>(
         account: signer,
         amount_a_in_max: u128,
@@ -94,6 +102,7 @@ module cetus_amm::amm_script {
             amount_b_out);
     }
 
+    #[cmd]
     public entry fun swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
         account: signer,
         amount_a_in_max: u128,
@@ -105,6 +114,7 @@ module cetus_amm::amm_script {
             amount_b_out);
     }
 
+    #[cmd]
     public entry fun swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(
         account: signer,
         amount_a_in_max: u128,
@@ -116,6 +126,7 @@ module cetus_amm::amm_script {
             amount_b_out);
     }
 
+    #[cmd]
     public entry fun set_pause_status(account: signer, pause:bool) {
         amm_router::set_pause_status(&account, pause);
     }

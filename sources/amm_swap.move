@@ -4,8 +4,8 @@ module cetus_amm::amm_swap {
     use std::signer;
     use std::option;
 
-    use aptos_framework::account;
-    use aptos_std::event::{Self, EventHandle};
+    use aptos_framework::event::{Self, EventHandle};
+    use aptos_framework::account::{Self, new_event_handle};
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
     use aptos_std::comparator;
     use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin};
@@ -308,11 +308,11 @@ module cetus_amm::amm_swap {
     fun init_event_handle(account: &signer) {
         if (!exists<PoolSwapEventHandle>(signer::address_of(account))) {
             move_to(account, PoolSwapEventHandle {
-                init_pool_events: event::new_event_handle<InitPoolEvent>(account),
-                add_liquidity_events: event::new_event_handle<AddLiquidityEvent>(account),
-                remove_liquidity_events: event::new_event_handle<RemoveLiquidityEvent>(account),
-                swap_events: event::new_event_handle<SwapEvent>(account),
-                swap_fee_events: event::new_event_handle<SwapFeeEvent>(account),
+                init_pool_events: new_event_handle<InitPoolEvent>(account),
+                add_liquidity_events: new_event_handle<AddLiquidityEvent>(account),
+                remove_liquidity_events: new_event_handle<RemoveLiquidityEvent>(account),
+                swap_events: new_event_handle<SwapEvent>(account),
+                swap_fee_events: new_event_handle<SwapFeeEvent>(account),
             });
         }
     }
