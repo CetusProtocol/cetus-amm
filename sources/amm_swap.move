@@ -23,21 +23,17 @@ module cetus_amm::amm_swap {
 
     const EINVALID_COIN_PAIR: u64 = 4001;
     const EACCOUNT_NOT_EXISTED: u64 = 4002;
-    const ELIQUIDITY_INSUFFICIENT_B_AMOUNT: u64 = 4003;
-    const ELIQUIDITY_OVERLIMIT_X_DESIRED: u64 = 4004;
-    const ELIQUIDITY_INSUFFICIENT_A_AMOUNT: u64 = 4005;
-    const ELIQUIDITY_INSUFFICIENT_MINTED: u64 = 4006;
-    const ELIQUIDITY_ADD_LIQUIDITY_FAILED: u64 = 4007;
-    const ELIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4008;
-    const ECOIN_INSUFFICIENT: u64 = 4009;
-    const ESWAPOUT_CALC_INVALID: u64 = 4010;
-    const EPOOL_DOES_NOT_EXIST: u64 = 4013;
+    const ELIQUIDITY_INSUFFICIENT_MINTED: u64 = 4003;
+    const ELIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4004;
+    const ECOIN_INSUFFICIENT: u64 = 4005;
+    const ESWAPOUT_CALC_INVALID: u64 = 4006;
+    const EPOOL_DOES_NOT_EXIST: u64 = 4007;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
     const GREATER_THAN: u8 = 2;
 
-    struct PoolLiquidityCoin<phantom CoinTypeA, phantom CoinTypeB> {}
+    struct PoolLiquidityCoin<phantom CoinTypeA, phantom CoinTypeB> has key, store, copy, drop {}
 
     struct Pool<phantom CoinTypeA, phantom CoinTypeB> has key {
         coin_a: Coin<CoinTypeA>,
@@ -129,91 +125,7 @@ module cetus_amm::amm_swap {
         emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
     }
 
-    public fun add_liquidity<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
-        amount_a_min: u128,
-        amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
-
-        amm_config::assert_pause();
-
-        let order = compare_coin<CoinTypeA, CoinTypeB>();
-        assert!(
-            !comparator::is_equal(&order),  
-            error::internal(EINVALID_COIN_PAIR));
-        if (comparator::is_smaller_than(&order)) {
-            intra_add_liquidity<CoinTypeA, CoinTypeB>(
-                account,
-                amount_a_desired,
-                amount_b_desired,
-                amount_a_min,
-                amount_b_min,
-            );
-        } else {
-            intra_add_liquidity<CoinTypeB, CoinTypeA>(
-                account,
-                amount_b_desired,
-                amount_a_desired,
-                amount_b_min,
-                amount_a_min,
-            );
-        }
-    }
-
-    fun intra_add_liquidity<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
-        amount_a_min: u128,
-        amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
-
-        assert!(exists<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()), error::not_found(EPOOL_DOES_NOT_EXIST));
-
-        let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
-            amount_a_desired,
-            amount_b_desired,
-            amount_a_min,
-            amount_b_min);
-        let coinA = coin::withdraw<CoinTypeA>(account,(amount_a as u64));
-        let coinB = coin::withdraw<CoinTypeB>(account,(amount_b as u64));
-        let liquidity_token = mint_and_emit_event<CoinTypeA, CoinTypeB>(
-                account,
-                coinA,
-                coinB,
-                amount_a_desired,
-                amount_b_desired,
-                amount_a_min,
-                amount_b_min);
-        assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
-        let sender = signer::address_of(account);
-        if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coins::register_internal<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
-        coin::deposit(sender,liquidity_token);
-    }
-
-    fun intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
-        amount_a_desired: u128,
-        amount_b_desired: u128,
-        amount_a_min: u128,
-        amount_b_min: u128,): (u128, u128) acquires Pool {
-        let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
-        if (reserve_a == 0 && reserve_b == 0) {
-            return (amount_a_desired, amount_b_desired)
-        } else {
-            let amount_b_optimal = quote(amount_a_desired, reserve_a, reserve_b);
-            if (amount_b_optimal <= amount_b_desired) {
-                assert!(amount_b_optimal >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
-                return (amount_a_desired, amount_b_optimal)
-            } else {
-                let amount_a_optimal = quote(amount_b_desired, reserve_b, reserve_a);
-                assert!(amount_a_optimal <= amount_a_desired, error::internal(ELIQUIDITY_OVERLIMIT_X_DESIRED));
-                assert!(amount_a_optimal >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
-                return (amount_a_optimal, amount_b_desired)
-            }
-        }
-    }
-
-    fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
+    public fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
         account: &signer,
         coinA: Coin<CoinTypeA>, 
         coinB: Coin<CoinTypeB>,
@@ -267,53 +179,7 @@ module cetus_amm::amm_swap {
         coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>((liquidity as u64), &pool.mint_capability)
     }
 
-    public fun remove_liquidity<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        liquidity: u128,
-        amount_a_min: u128,
-        amount_b_min: u128) acquires Pool,PoolSwapEventHandle {
-
-        amm_config::assert_pause();
-
-        let order = compare_coin<CoinTypeA, CoinTypeB>();
-        assert!(
-            !comparator::is_equal(&order),  
-            error::internal(EINVALID_COIN_PAIR));
-        if (comparator::is_smaller_than(&order)) {
-            intra_remove_liquidity<CoinTypeA, CoinTypeB>(
-                account,
-                liquidity,
-                amount_a_min,
-                amount_b_min);
-        } else {
-            intra_remove_liquidity<CoinTypeB, CoinTypeA>(
-                account,
-                liquidity,
-                amount_b_min,
-                amount_a_min);
-        }
-    }
-
-    fun intra_remove_liquidity<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        liquidity: u128,
-        amount_a_min: u128,
-        amount_b_min: u128) acquires Pool,PoolSwapEventHandle {
-        let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
-        let (token_a, token_b) = burn_and_emit_event(
-            account,
-            liquidity_token,
-            amount_a_min,
-            amount_b_min);
-        assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
-        assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
-        let sender = signer::address_of(account);
-        coin::deposit(sender,token_a);
-        coin::deposit(sender,token_b);
-    }
-
-
-    fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
+    public fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
         account: &signer,
         to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
         amount_a_min: u128,

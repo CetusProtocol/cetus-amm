@@ -2,16 +2,21 @@ module cetus_amm::amm_router {
     use std::error;
     use std::signer;
     use cetus_amm::amm_config;
-    use cetus_amm::amm_swap;
+    use cetus_amm::amm_swap::{PoolLiquidityCoin,Self};
     use cetus_amm::amm_utils;
     use aptos_framework::coin;
     use aptos_framework::coins;
     use aptos_std::comparator;
+    use cetus_amm::amm_math::{Self, quote, min};
 
 
     const ESWAP_B_OUT_LESSTHAN_EXPECTED: u64 = 3001;
     const ESWAP_A_IN_OVER_LIMIT_MAX: u64 = 3002;
     const EINVALID_COIN_PAIR: u64 = 3003;
+    const ELIQUIDITY_INSUFFICIENT_B_AMOUNT: u64 = 3004;
+    const ELIQUIDITY_OVERLIMIT_X_DESIRED: u64 = 3005;
+    const ELIQUIDITY_INSUFFICIENT_A_AMOUNT: u64 = 3006;
+    const ELIQUIDITY_ADD_LIQUIDITY_FAILED: u64 = 3007;
 
     public fun set_pool_fee_config(
         account: &signer,
@@ -56,12 +61,78 @@ module cetus_amm::amm_router {
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        amm_swap::add_liquidity<CoinTypeA, CoinTypeB>(
-            account,
+        amm_config::assert_pause();
+
+        let order = amm_utils::compare_coin<CoinTypeA, CoinTypeB>();
+        assert!(
+            !comparator::is_equal(&order),  
+            error::internal(EINVALID_COIN_PAIR));
+        if (comparator::is_smaller_than(&order)) {
+            intra_add_liquidity<CoinTypeA, CoinTypeB>(
+                account,
+                amount_a_desired,
+                amount_b_desired,
+                amount_a_min,
+                amount_b_min,
+            );
+        } else {
+            intra_add_liquidity<CoinTypeB, CoinTypeA>(
+                account,
+                amount_b_desired,
+                amount_a_desired,
+                amount_b_min,
+                amount_a_min,
+            );
+        }
+    }
+
+    fun intra_add_liquidity<CoinTypeA, CoinTypeB>(
+        account: &signer,
+        amount_a_desired: u128,
+        amount_b_desired: u128,
+        amount_a_min: u128,
+        amount_b_min: u128) {
+        let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
             amount_b_min);
+        let coinA = coin::withdraw<CoinTypeA>(account,(amount_a as u64));
+        let coinB = coin::withdraw<CoinTypeB>(account,(amount_b as u64));
+        let liquidity_token = amm_swap::mint_and_emit_event<CoinTypeA, CoinTypeB>(
+                account,
+                coinA,
+                coinB,
+                amount_a_desired,
+                amount_b_desired,
+                amount_a_min,
+                amount_b_min);
+        assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
+        let sender = signer::address_of(account);
+        if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coins::register_internal<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
+        coin::deposit(sender,liquidity_token);
+    }
+
+    fun intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
+        amount_a_desired: u128,
+        amount_b_desired: u128,
+        amount_a_min: u128,
+        amount_b_min: u128,): (u128, u128) {
+        let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
+        if (reserve_a == 0 && reserve_b == 0) {
+            return (amount_a_desired, amount_b_desired)
+        } else {
+            let amount_b_optimal = amm_math::quote(amount_a_desired, reserve_a, reserve_b);
+            if (amount_b_optimal <= amount_b_desired) {
+                assert!(amount_b_optimal >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
+                return (amount_a_desired, amount_b_optimal)
+            } else {
+                let amount_a_optimal = quote(amount_b_desired, reserve_b, reserve_a);
+                assert!(amount_a_optimal <= amount_a_desired, error::internal(ELIQUIDITY_OVERLIMIT_X_DESIRED));
+                assert!(amount_a_optimal >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
+                return (amount_a_optimal, amount_b_desired)
+            }
+        }
     }
 
     /// Remove liquidity for user
@@ -70,11 +141,43 @@ module cetus_amm::amm_router {
         liquidity: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        amm_swap::remove_liquidity<CoinTypeA, CoinTypeB>(
+        amm_config::assert_pause();
+
+        let order = amm_utils::compare_coin<CoinTypeA, CoinTypeB>();
+        assert!(
+            !comparator::is_equal(&order),  
+            error::internal(EINVALID_COIN_PAIR));
+        if (comparator::is_smaller_than(&order)) {
+            intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+                account,
+                liquidity,
+                amount_a_min,
+                amount_b_min);
+        } else {
+            intra_remove_liquidity<CoinTypeB, CoinTypeA>(
+                account,
+                liquidity,
+                amount_b_min,
+                amount_a_min);
+        }
+    }
+
+    fun intra_remove_liquidity<CoinTypeA, CoinTypeB>(
+        account: &signer,
+        liquidity: u128,
+        amount_a_min: u128,
+        amount_b_min: u128) {
+        let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
+        let (token_a, token_b) = amm_swap::burn_and_emit_event(
             account,
-            liquidity,
+            liquidity_token,
             amount_a_min,
             amount_b_min);
+        assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
+        assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
+        let sender = signer::address_of(account);
+        coin::deposit(sender,token_a);
+        coin::deposit(sender,token_b);
     }
 
     public fun swap_exact_coin_for_coin<CoinTypeA, CoinTypeB>(
