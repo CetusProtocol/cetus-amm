@@ -11,7 +11,7 @@ module cetus_amm::amm_swap {
     use aptos_std::comparator;
     use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin};
     use cetus_amm::amm_config::{Self, assert_admin};
-    use cetus_amm::amm_math::{Self, quote, sqrt, min};
+    use cetus_amm::amm_math::{Self, sqrt, min};
     use aptos_std::type_info;
 
 
@@ -33,7 +33,7 @@ module cetus_amm::amm_swap {
     const LESS_THAN: u8 = 1;
     const GREATER_THAN: u8 = 2;
 
-    struct PoolLiquidityCoin<phantom CoinTypeA, phantom CoinTypeB> has key, store, copy, drop {}
+    struct PoolLiquidityCoin<phantom CoinTypeA, phantom CoinTypeB> {}
 
     struct Pool<phantom CoinTypeA, phantom CoinTypeB> has key {
         coin_a: Coin<CoinTypeA>,

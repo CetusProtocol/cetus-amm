@@ -7,7 +7,7 @@ module cetus_amm::amm_router {
     use aptos_framework::coin;
     use aptos_framework::coins;
     use aptos_std::comparator;
-    use cetus_amm::amm_math::{Self, quote, min};
+    use cetus_amm::amm_math::{Self, quote};
 
 
     const ESWAP_B_OUT_LESSTHAN_EXPECTED: u64 = 3001;
