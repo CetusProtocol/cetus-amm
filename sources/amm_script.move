@@ -69,8 +69,7 @@ module cetus_amm::amm_script {
         amm_router::swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB> (
             &account,
             amount_a_in,
-            amount_b_out_min
-        );
+            amount_b_out_min);
     }
 
     public entry fun swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(
@@ -81,8 +80,7 @@ module cetus_amm::amm_script {
         amm_router::swap_exact_coin_for_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB> (
             &account,
             amount_a_in,
-            amount_b_out_min
-        )
+            amount_b_out_min);
     }
 
     public entry fun swap_coin_for_exact_coin<CoinTypeA, CoinTypeB>(
@@ -115,8 +113,7 @@ module cetus_amm::amm_script {
         amm_router::swap_coin_for_exact_coin_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB> (
             &account,
             amount_a_in_max,
-            amount_b_out,
-        )
+            amount_b_out);
     }
 
     public entry fun set_pause_status(account: signer, pause:bool) {
