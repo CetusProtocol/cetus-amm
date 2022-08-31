@@ -5,9 +5,8 @@ module cetus_amm::amm_config {
     //
     // Errors
     //
-
-    const ECONFIG_NOT_HAS_PRIVILEGE: u64 = 1001;
-    const ECONFIG_POOL_PAUSE: u64 = 1002;
+    const ENOT_HAS_PRIVILEGE: u64 = 1001;
+    const EPOOL_PAUSE: u64 = 1002;
 
     struct PoolFeeConfig has key {
         trade_fee_numerator: u64,
@@ -82,12 +81,12 @@ module cetus_amm::amm_config {
     public fun assert_admin(account: &signer) {
         assert!(
             signer::address_of(account) == admin_address(), 
-            error::invalid_argument(ECONFIG_NOT_HAS_PRIVILEGE));
+            error::permission_denied(ENOT_HAS_PRIVILEGE));
     }
 
     public fun assert_pause() acquires PoolPauseStatus {
         assert!(
             !get_pool_pause(),
-            error::invalid_argument(ECONFIG_POOL_PAUSE));
+            error::unavailable(EPOOL_PAUSE));
     }
 }

@@ -21,20 +21,19 @@ module cetus_amm::amm_swap {
     // Errors
     //
 
-    const ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER: u64 = 4001;
-    const ESWAP_ACCOUNT_NOT_EXISTED: u64 = 4002;
-    const ERROR_LIQUIDITY_INSUFFICIENT_B_AMOUNT: u64 = 4003;
-    const ERROR_LIQUIDITY_OVERLIMIT_X_DESIRED: u64 = 4004;
-    const ERROR_LIQUIDITY_INSUFFICIENT_A_AMOUNT: u64 = 4005;
-    const ERROR_LIQUIDITY_INSUFFICIENT_MINTED: u64 = 4006;
-    const ERROR_LIQUIDITY_ADD_LIQUIDITY_FAILED: u64 = 4007;
-    const ERROR_LIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4008;
-    const ESWAP_COIN_INSUFFICIENT: u64 = 4009;
-    const ESWAP_SWAPOUT_CALC_INVALID: u64 = 4010;
+    const EINVALID_COIN_PAIR: u64 = 4001;
+    const EACCOUNT_NOT_EXISTED: u64 = 4002;
+    const ELIQUIDITY_INSUFFICIENT_B_AMOUNT: u64 = 4003;
+    const ELIQUIDITY_OVERLIMIT_X_DESIRED: u64 = 4004;
+    const ELIQUIDITY_INSUFFICIENT_A_AMOUNT: u64 = 4005;
+    const ELIQUIDITY_INSUFFICIENT_MINTED: u64 = 4006;
+    const ELIQUIDITY_ADD_LIQUIDITY_FAILED: u64 = 4007;
+    const ELIQUIDITY_SWAP_BURN_CALC_INVALID: u64 = 4008;
+    const ECOIN_INSUFFICIENT: u64 = 4009;
+    const ESWAPOUT_CALC_INVALID: u64 = 4010;
     const ESWAP_B_OUT_LESSTHAN_EXPECTED: u64 = 4011;
-    const ESWAP_INVALID_COIN_PAIR: u64 = 4012;
-    const ESWAP_A_IN_OVER_LIMIT_MAX: u64 = 4013;
-    const ERROR_POOL_DOES_NOT_EXIST: u64 = 4014;
+    const ESWAP_A_IN_OVER_LIMIT_MAX: u64 = 4012;
+    const EPOOL_DOES_NOT_EXIST: u64 = 4013;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
@@ -116,12 +115,12 @@ module cetus_amm::amm_swap {
         //check protocol_fee_to existed
         assert!(
              account::exists_at(protocol_fee_to),
-             error::invalid_argument(ESWAP_ACCOUNT_NOT_EXISTED));
+             error::not_found(EACCOUNT_NOT_EXISTED));
 
         //compare coins
         assert!(
             !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
+            error::internal(EINVALID_COIN_PAIR));
 
         if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
             intra_init_pool<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
@@ -159,7 +158,7 @@ module cetus_amm::amm_swap {
         let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
             !comparator::is_equal(&order),  
-            error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
+            error::internal(EINVALID_COIN_PAIR));
         if (comparator::is_smaller_than(&order)) {
             intra_add_liquidity<CoinTypeA, CoinTypeB>(
                 account,
@@ -186,7 +185,7 @@ module cetus_amm::amm_swap {
         amount_a_min: u128,
         amount_b_min: u128) acquires Pool, PoolSwapEventHandle {
 
-        assert!(exists<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()), error::invalid_argument(ERROR_POOL_DOES_NOT_EXIST));
+        assert!(exists<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()), error::not_found(EPOOL_DOES_NOT_EXIST));
 
         let (amount_a, amount_b) = intra_calculate_amount_for_liquidity<CoinTypeA, CoinTypeB>(
             amount_a_desired,
@@ -203,7 +202,7 @@ module cetus_amm::amm_swap {
                 amount_b_desired,
                 amount_a_min,
                 amount_b_min);
-        assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ERROR_LIQUIDITY_ADD_LIQUIDITY_FAILED));
+        assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coins::register_internal<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
         coin::deposit(sender,liquidity_token);
@@ -220,12 +219,12 @@ module cetus_amm::amm_swap {
         } else {
             let amount_b_optimal = quote(amount_a_desired, reserve_a, reserve_b);
             if (amount_b_optimal <= amount_b_desired) {
-                assert!(amount_b_optimal >= amount_b_min, ERROR_LIQUIDITY_INSUFFICIENT_B_AMOUNT);
+                assert!(amount_b_optimal >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
                 return (amount_a_desired, amount_b_optimal)
             } else {
                 let amount_a_optimal = quote(amount_b_desired, reserve_b, reserve_a);
-                assert!(amount_a_optimal <= amount_a_desired, ERROR_LIQUIDITY_OVERLIMIT_X_DESIRED);
-                assert!(amount_a_optimal >= amount_a_min, ERROR_LIQUIDITY_INSUFFICIENT_A_AMOUNT);
+                assert!(amount_a_optimal <= amount_a_desired, error::internal(ELIQUIDITY_OVERLIMIT_X_DESIRED));
+                assert!(amount_a_optimal >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
                 return (amount_a_optimal, amount_b_desired)
             }
         }
@@ -277,7 +276,7 @@ module cetus_amm::amm_swap {
                             amm_math::safe_mul_div_u128(amountB,total_supply,reserve_b));
         };
 
-        assert!(liquidity > 0, error::invalid_argument(ERROR_LIQUIDITY_INSUFFICIENT_MINTED));
+        assert!(liquidity > 0, error::invalid_argument(ELIQUIDITY_INSUFFICIENT_MINTED));
 
         coin::merge(&mut pool.coin_a, coinA);
         coin::merge(&mut pool.coin_b, coinB);
@@ -296,7 +295,7 @@ module cetus_amm::amm_swap {
         let order = compare_coin<CoinTypeA, CoinTypeB>();
         assert!(
             !comparator::is_equal(&order),  
-            error::invalid_argument(ESWAP_COINS_COMPARE_NOT_EQUIP_SMALLER));
+            error::internal(EINVALID_COIN_PAIR));
         if (comparator::is_smaller_than(&order)) {
             intra_remove_liquidity<CoinTypeA, CoinTypeB>(
                 account,
@@ -323,8 +322,8 @@ module cetus_amm::amm_swap {
             liquidity_token,
             amount_a_min,
             amount_b_min);
-        assert!((coin::value(&token_a) as u128) >= amount_a_min, ERROR_LIQUIDITY_INSUFFICIENT_A_AMOUNT);
-        assert!((coin::value(&token_b) as u128) >= amount_b_min, ERROR_LIQUIDITY_INSUFFICIENT_B_AMOUNT);
+        assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
+        assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
         let sender = signer::address_of(account);
         coin::deposit(sender,token_a);
         coin::deposit(sender,token_b);
@@ -358,7 +357,7 @@ module cetus_amm::amm_swap {
         let total_supply = *option::borrow(&coin::supply<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>());
         let amount0 = (amm_math::safe_mul_div_u128(to_burn_value,reserveA,total_supply) as u64);
         let amount1 = (amm_math::safe_mul_div_u128(to_burn_value,reserveB,total_supply) as u64); 
-        assert!(amount0 > 0 && amount1 > 0, error::invalid_argument(ERROR_LIQUIDITY_SWAP_BURN_CALC_INVALID)); 
+        assert!(amount0 > 0 && amount1 > 0, error::internal(ELIQUIDITY_SWAP_BURN_CALC_INVALID)); 
 
         coin::burn(to_burn, &pool.burn_capability);
         
@@ -399,7 +398,7 @@ module cetus_amm::amm_swap {
         let b_in_value = coin::value(&coin_b_in);
         assert!(
             a_in_value > 0 || b_in_value > 0,  
-            error::invalid_argument(ESWAP_COIN_INSUFFICIENT));
+            error::internal(ECOIN_INSUFFICIENT));
 
         let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>();
         let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
@@ -419,7 +418,7 @@ module cetus_amm::amm_swap {
             let cmp_order = amm_math::safe_compare_mul_u128(a_adjusted, b_adjusted, (a_reserve as u128), (b_reserve as u128));
              assert!(
                 (EQUAL == cmp_order || GREATER_THAN == cmp_order), 
-                 error::invalid_argument(ESWAP_SWAPOUT_CALC_INVALID));
+                 error::internal(ESWAPOUT_CALC_INVALID));
         };
 
         let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>();
@@ -436,14 +435,14 @@ module cetus_amm::amm_swap {
     )  acquires Pool, PoolSwapEventHandle {
          assert!(
             !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::invalid_argument(ESWAP_INVALID_COIN_PAIR));
+            error::invalid_argument(EINVALID_COIN_PAIR));
 
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
 
         let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in);
         assert!(b_out >= amount_b_out_min, 
-            error::invalid_argument(ESWAP_B_OUT_LESSTHAN_EXPECTED));
+            error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
 
         let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
         let (coin_a_out, coin_b_out);
@@ -468,14 +467,14 @@ module cetus_amm::amm_swap {
     ) acquires Pool, PoolSwapEventHandle {
          assert!(
             !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::invalid_argument(ESWAP_INVALID_COIN_PAIR));
+            error::invalid_argument(EINVALID_COIN_PAIR));
 
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<CoinTypeB>(sender)) coins::register_internal<CoinTypeB>(account);
 
         let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out);
         assert!(a_in <= amount_a_in_max, 
-            error::invalid_argument(ESWAP_A_IN_OVER_LIMIT_MAX));
+            error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
 
         let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
         let (coin_a_out, coin_b_out);
@@ -597,7 +596,7 @@ module cetus_amm::amm_swap {
         if (fee_handle) {
             assert!(
                 !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-                 error::invalid_argument(ESWAP_INVALID_COIN_PAIR));
+                 error::internal(EINVALID_COIN_PAIR));
             
              if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
                 emit_swap_fee_event<CoinTypeA, CoinTypeB>(signer_address, fee_address, fee_out);
@@ -618,7 +617,7 @@ module cetus_amm::amm_swap {
          } else {
              assert!(
                 !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
-                 error::invalid_argument(ESWAP_INVALID_COIN_PAIR));
+                 error::internal(EINVALID_COIN_PAIR));
             
              if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
                 return_back_to_lp_pool<CoinTypeA, CoinTypeB>(coin_a, coin::zero());

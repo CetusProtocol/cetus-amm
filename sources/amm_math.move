@@ -5,8 +5,8 @@ module cetus_amm::amm_math {
     //
     // Errors
     //
-    const EMATH_DIVIDE_BY_ZERO: u64 = 2001;
-    const ERROR_ROUTER_PARAMETER_INVALID: u64 = 2001;
+    const EDIVIDE_BY_ZERO: u64 = 2001;
+    const EPARAMETER_INVALID: u64 = 2001;
 
     public fun safe_compare_mul_u128(a1: u128, b1: u128, a2: u128, b2: u128): u8 {
         let left = u256::mul(u256::from_u128(a1), u256::from_u128(b1));
@@ -20,7 +20,7 @@ module cetus_amm::amm_math {
 
     public fun mul_div_u128(x: u128, y: u128, z: u128): U256 {
         if (z == 0) {
-            abort error::invalid_argument(EMATH_DIVIDE_BY_ZERO)
+            abort error::aborted(EDIVIDE_BY_ZERO)
         };
 
         let x_u256 = u256::from_u128(x);
@@ -30,8 +30,8 @@ module cetus_amm::amm_math {
     }
 
     public fun quote(amount_a: u128, reserve_a: u128, reserve_b: u128): u128 {
-        assert!(amount_a > 0, error::invalid_argument(ERROR_ROUTER_PARAMETER_INVALID));
-        assert!(reserve_a > 0 && reserve_b> 0, error::invalid_argument(ERROR_ROUTER_PARAMETER_INVALID));
+        assert!(amount_a > 0, error::invalid_argument(EPARAMETER_INVALID));
+        assert!(reserve_a > 0 && reserve_b> 0, error::invalid_argument(EPARAMETER_INVALID));
         let amount_y = safe_mul_div_u128(amount_a,reserve_b,reserve_a);
         amount_y
     }
