@@ -7,6 +7,7 @@ module cetus_amm::amm_math {
     //
     const EDIVIDE_BY_ZERO: u64 = 2001;
     const EPARAMETER_INVALID: u64 = 2001;
+    const U128_MAX:u128 = 340282366920938463463374607431768211455;
 
     public fun safe_compare_mul_u128(a1: u128, b1: u128, a2: u128, b2: u128): u8 {
         let left = u256::mul(u256::from_u128(a1), u256::from_u128(b1));
@@ -51,5 +52,22 @@ module cetus_amm::amm_math {
 
     public fun min(x: u128, y: u128): u128 {
         if (x < y) x else y 
+    }
+
+    #[test]
+    public entry fun test_safe_mul_div_u128() {
+        let x: u128 = 9446744073709551615;
+        let y: u128 = 1009855555;
+        let z: u128 = 3979;
+        let _r_expected:u128 = 2397548876476230247541334;
+        let r = Self::safe_mul_div_u128(x, y, z);
+        assert!(r == _r_expected, 3001);
+    }
+
+    #[test]
+    public entry fun test_sqrt_by_max_u128() {
+        let _r_expected:u128 = 18446744073709551615;
+        let r = Self::sqrt(U128_MAX);
+        assert!(r == _r_expected, 3004);
     }
 }

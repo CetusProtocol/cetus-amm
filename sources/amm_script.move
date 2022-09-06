@@ -24,7 +24,6 @@ module cetus_amm::amm_script {
             protocol_fee_to);
     }
 
-    /// Add liquidity for user
     #[cmd]
     public entry fun add_liquidity<CoinTypeA, CoinTypeB>(
         account: signer,
@@ -40,7 +39,6 @@ module cetus_amm::amm_script {
             amount_b_min);
     }
 
-    /// Remove liquidity for user
     #[cmd]
     public entry fun remove_liquidity<CoinTypeA, CoinTypeB>(
         account: signer,

@@ -8,7 +8,7 @@ module cetus_amm::amm_swap {
     use aptos_framework::account::{Self, new_event_handle};
     use aptos_framework::coin::{Self, Coin, BurnCapability, MintCapability};
     use aptos_std::comparator;
-    use cetus_amm::amm_utils::{Self, assert_is_coin, compare_coin};
+    use cetus_amm::amm_utils;
     use cetus_amm::amm_config::{Self, assert_admin};
     use cetus_amm::amm_math::{Self, sqrt, min};
     use aptos_std::type_info;
@@ -98,8 +98,8 @@ module cetus_amm::amm_swap {
 
     public fun init_pool<CoinTypeA, CoinTypeB>(account: &signer, protocol_fee_to: address) acquires PoolSwapEventHandle {
         //check coin type
-        assert_is_coin<CoinTypeA>();
-        assert_is_coin<CoinTypeB>();
+        amm_utils::assert_is_coin<CoinTypeA>();
+        amm_utils::assert_is_coin<CoinTypeB>();
 
         //check admin
         assert_admin(account);
@@ -334,7 +334,7 @@ module cetus_amm::amm_swap {
     }
 
     public fun get_reserves<CoinTypeA, CoinTypeB>(): (u128, u128) acquires Pool {
-         if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+         if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
             let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
             let a_reserve = (coin::value(&pool.coin_a) as u128);
             let b_reserve = (coin::value(&pool.coin_b) as u128);
@@ -366,10 +366,10 @@ module cetus_amm::amm_swap {
         let (fee_handle, fee_out) = swap_fee_direct_deposit<CoinTypeA, CoinTypeB>(fee_address, coin_a);
         if (fee_handle) {
             assert!(
-                !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
+                !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
                  error::internal(EINVALID_COIN_PAIR));
             
-             if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+             if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
                 emit_swap_fee_event<CoinTypeA, CoinTypeB>(signer_address, fee_address, fee_out);
              } else {
                 emit_swap_fee_event<CoinTypeB, CoinTypeA>(signer_address, fee_address, fee_out);
@@ -387,10 +387,10 @@ module cetus_amm::amm_swap {
             return (true, (a_value as u128))
          } else {
              assert!(
-                !comparator::is_equal(&compare_coin<CoinTypeA, CoinTypeB>()),  
+                !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
                  error::internal(EINVALID_COIN_PAIR));
             
-             if (comparator::is_smaller_than(&compare_coin<CoinTypeA, CoinTypeB>())) {
+             if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
                 return_back_to_lp_pool<CoinTypeA, CoinTypeB>(coin_a, coin::zero());
              } else {
                 return_back_to_lp_pool<CoinTypeB, CoinTypeA>(coin::zero(), coin_a);

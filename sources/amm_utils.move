@@ -3,7 +3,7 @@ module cetus_amm::amm_utils {
     use aptos_framework::coin;
     use aptos_std::type_info;
     use aptos_std::comparator;
-    use cetus_amm::amm_math::{Self, safe_mul_div_u128};
+    use cetus_amm::amm_math;
     //
     // Errors
     //
@@ -36,7 +36,7 @@ module cetus_amm::amm_utils {
         assert!(reserve_out > amount_out, error::internal(EPARAMETER_INVALID));
 
         let denominator = (reserve_out - amount_out) * ((fee_denumerator - fee_numerator) as u128);
-        safe_mul_div_u128(amount_out * (fee_denumerator as u128), reserve_in, denominator) + 1
+        amm_math::safe_mul_div_u128(amount_out * (fee_denumerator as u128), reserve_in, denominator) + 1
     }
 
     public fun get_amount_out(
@@ -54,6 +54,6 @@ module cetus_amm::amm_utils {
 
         let amount_in_with_fee = amount_in * ((fee_denumerator - fee_numerator) as u128);
         let denominator = reserve_in * (fee_denumerator as u128) + amount_in_with_fee;
-        safe_mul_div_u128(amount_in_with_fee, reserve_out, denominator)
+        amm_math::safe_mul_div_u128(amount_in_with_fee, reserve_out, denominator)
     }
 }
