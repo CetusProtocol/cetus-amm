@@ -4,6 +4,7 @@ module cetus_amm::amm_utils {
     use aptos_std::type_info;
     use aptos_std::comparator;
     use cetus_amm::amm_math;
+    use aptos_std::debug;
     //
     // Errors
     //
@@ -55,5 +56,15 @@ module cetus_amm::amm_utils {
         let amount_in_with_fee = amount_in * ((fee_denumerator - fee_numerator) as u128);
         let denominator = reserve_in * (fee_denumerator as u128) + amount_in_with_fee;
         amm_math::safe_mul_div_u128(amount_in_with_fee, reserve_out, denominator)
+    }
+
+    #[test]
+    public entry fun test_get_amount_out() {
+        let amount_in:u128 = 999999;
+        let reserve_in: u128 = 10000010001;
+        let reserve_out: u128 = 1971498032450;
+        let out = get_amount_out(amount_in, reserve_in, reserve_out, 2, 1000);
+        debug::print(&out);
+        assert!(out == 196735475, 3004);
     }
 }

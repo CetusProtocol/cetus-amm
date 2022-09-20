@@ -14,7 +14,7 @@ module cetus_amm::amm_swap {
     use aptos_std::type_info;
 
 
-    const MINIMUM_LIQUIDITY: u128 = 1000;
+    const MINIMUM_LIQUIDITY: u128 = 10;
 
     //
     // Errors
@@ -257,7 +257,7 @@ module cetus_amm::amm_swap {
         {
             let a_reserve_new = coin::value(&pool.coin_a);
             let b_reserve_new = coin::value(&pool.coin_b);
-            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
             
             let a_adjusted = (a_reserve_new as u128) * (fee_denominator as u128) - (a_in_value as u128) * (fee_numerator as u128);
             let b_adjusted = (b_reserve_new as u128) * (fee_denominator as u128) - (b_in_value as u128) * (fee_numerator as u128);
@@ -297,7 +297,7 @@ module cetus_amm::amm_swap {
             account,
             string::utf8(b"CETUS AMM LP"),
             string::utf8(b"CALP"),
-            18,
+            6,
             true,
         );
 
@@ -348,14 +348,19 @@ module cetus_amm::amm_swap {
     }
 
     public fun calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>() : (u128, u128) {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
-        let (protocol_fee_numberator, protocol_fee_denominator) = amm_config::get_protocol_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
+        let (protocol_fee_numberator, protocol_fee_denominator) = amm_config::get_protocol_fee<CoinTypeA, CoinTypeB>();
          ((fee_numerator * protocol_fee_numberator as u128), (fee_denominator * protocol_fee_denominator as u128))
     }
 
     public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>) acquires PoolSwapEventHandle, Pool {
-         let pool = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(signer_address, pool.protocol_fee_to, token_a);
+        let protocol_fee_to: address;
+        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
+            protocol_fee_to = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()).protocol_fee_to;
+        } else {
+            protocol_fee_to = borrow_global<Pool<CoinTypeB, CoinTypeA>>(amm_config::admin_address()).protocol_fee_to;
+        };
+        handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(signer_address, protocol_fee_to, token_a);
     }
 
     fun handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(

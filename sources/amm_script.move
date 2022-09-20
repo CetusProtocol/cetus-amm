@@ -2,14 +2,14 @@ module cetus_amm::amm_script {
     use cetus_amm::amm_router;
     
     #[cmd]
-    public entry fun set_pool_fee_config(
+    public entry fun set_pool_fee_config<CoinTypeA, CoinTypeB>(
         account: signer,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
         protocol_fee_numerator: u64,
         protocol_fee_denominator: u64
     ) {
-        amm_router::set_pool_fee_config(
+        amm_router::set_pool_fee_config<CoinTypeA, CoinTypeB>(
             &account,
             trade_fee_numerator,
             trade_fee_denominator,

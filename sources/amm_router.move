@@ -17,19 +17,32 @@ module cetus_amm::amm_router {
     const ELIQUIDITY_INSUFFICIENT_A_AMOUNT: u64 = 3006;
     const ELIQUIDITY_ADD_LIQUIDITY_FAILED: u64 = 3007;
 
-    public fun set_pool_fee_config(
+    public fun set_pool_fee_config<CoinTypeA, CoinTypeB>(
         account: &signer,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
         protocol_fee_numerator: u64,
         protocol_fee_denominator: u64
     ) {
-        amm_config::set_pool_fee_config(
-            account,
-            trade_fee_numerator,
-            trade_fee_denominator,
-            protocol_fee_numerator,
-            protocol_fee_denominator);
+        //compare coins
+        assert!(
+            !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
+            error::internal(EINVALID_COIN_PAIR));
+        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
+            amm_config::set_pool_fee_config<CoinTypeA, CoinTypeB>(
+                account,
+                trade_fee_numerator,
+                trade_fee_denominator,
+                protocol_fee_numerator,
+                protocol_fee_denominator);
+        } else {
+            amm_config::set_pool_fee_config<CoinTypeB, CoinTypeA>(
+                account,
+                trade_fee_numerator,
+                trade_fee_denominator,
+                protocol_fee_numerator,
+                protocol_fee_denominator);
+        }
     }
 
     public fun set_pause_status(account: &signer, pause:bool) {
@@ -327,30 +340,32 @@ module cetus_amm::amm_router {
     }
 
     public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128): u128 {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
         let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
         amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
     }
 
     public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128): u128 {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
         let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
         amm_utils::get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
     }
 
     public fun get_amount_out_router2<CoinTypeA, CoinTypeX, CoinTypeB>(amount_a_in: u128): (u128, u128) {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
         let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
         let x_out = amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_x as u128), fee_numerator, fee_denominator);
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeX, CoinTypeB>();
         let (reserve_x, reserve_b) = amm_swap::get_reserves<CoinTypeX, CoinTypeB>();
         let b_out =  amm_utils::get_amount_out(x_out, (reserve_x as u128), (reserve_b as u128), fee_numerator, fee_denominator);
         (x_out, b_out)
     }
 
     public fun get_amount_in_router2<CoinTypeA, CoinTypeX, CoinTypeB>(amount_b_out: u128): (u128, u128) {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeX, CoinTypeB>();
         let (reserve_x, reserve_b) = amm_swap::get_reserves<CoinTypeX, CoinTypeB>();
         let x_in = amm_utils::get_amount_in(amount_b_out, reserve_x, reserve_b, fee_numerator, fee_denominator);
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
         let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
         let a_in = amm_utils::get_amount_in(x_in, reserve_a, reserve_x, fee_numerator, fee_denominator);
         (x_in, a_in)
@@ -359,7 +374,7 @@ module cetus_amm::amm_router {
     public fun get_amount_out_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(amount_a_in: u128): (u128, u128, u128) {
         let (x_out, y_out) = get_amount_out_router2<CoinTypeA, CoinTypeX, CoinTypeY>(amount_a_in);
 
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeY, CoinTypeB>();
         let (reserve_y, reserve_b) = amm_swap::get_reserves<CoinTypeY, CoinTypeB>();
         let b_out =  amm_utils::get_amount_out(y_out, (reserve_y as u128), (reserve_b as u128), fee_numerator, fee_denominator);
         (x_out, y_out, b_out)
@@ -368,7 +383,7 @@ module cetus_amm::amm_router {
     public fun get_amount_in_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(amount_b_out: u128): (u128, u128, u128) {
         let (y_in, x_in) = get_amount_in_router2<CoinTypeX, CoinTypeY, CoinTypeB>(amount_b_out);
 
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee();
+        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
         let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
         let a_in = amm_utils::get_amount_in(x_in, reserve_a, reserve_x, fee_numerator, fee_denominator);
         (y_in, x_in, a_in)
