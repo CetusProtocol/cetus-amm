@@ -1,8 +1,6 @@
 module cetus_amm::amm_config {
     use std::error;
     use std::signer;
-    use aptos_std::comparator;
-    use cetus_amm::amm_utils;
     //
     // Errors
     //
@@ -67,15 +65,7 @@ module cetus_amm::amm_config {
     }
 
     public fun get_trade_fee<CoinTypeA, CoinTypeB>(): (u64, u64) acquires PoolFeeConfig {
-         if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
-            get_trade_fee_internal<CoinTypeA, CoinTypeB>()
-         } else {
-            get_trade_fee_internal<CoinTypeB, CoinTypeA>()
-        } 
-    }
-
-    fun get_trade_fee_internal<CoinTypeA, CoinTypeB>(): (u64, u64) acquires PoolFeeConfig {
-        if (exists<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address())) {
+         if (exists<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address())) {
             let fee_config = borrow_global<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address());
             (fee_config.trade_fee_numerator, fee_config.trade_fee_denominator)
          } else {
@@ -84,15 +74,7 @@ module cetus_amm::amm_config {
     }
 
     public fun get_protocol_fee<CoinTypeA, CoinTypeB>(): (u64, u64) acquires PoolFeeConfig  {
-         if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
-            get_protocol_fee_internal<CoinTypeA, CoinTypeB>()
-         } else {
-            get_protocol_fee_internal<CoinTypeB, CoinTypeA>()
-         }
-    }
-
-    fun get_protocol_fee_internal<CoinTypeA, CoinTypeB>(): (u64, u64) acquires PoolFeeConfig  {
-        if (exists<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address())) {
+         if (exists<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address())) {
             let fee_config = borrow_global<PoolFeeConfig<CoinTypeA, CoinTypeB>>(admin_address());
             (fee_config.protocol_fee_numerator, fee_config.protocol_fee_denominator)
         } else {

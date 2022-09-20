@@ -24,11 +24,7 @@ module cetus_amm::amm_router {
         protocol_fee_numerator: u64,
         protocol_fee_denominator: u64
     ) {
-        //compare coins
-        assert!(
-            !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
-            error::internal(EINVALID_COIN_PAIR));
-        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
+        if (amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>()) {
             amm_config::set_pool_fee_config<CoinTypeA, CoinTypeB>(
                 account,
                 trade_fee_numerator,
@@ -55,15 +51,9 @@ module cetus_amm::amm_router {
             !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
             error::internal(EINVALID_COIN_PAIR));
 
-        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
-            amm_swap::init_pool<CoinTypeA, CoinTypeB> (
+        amm_swap::init_pool<CoinTypeA, CoinTypeB> (
             account,
             protocol_fee_to);
-        } else {
-            amm_swap::init_pool<CoinTypeB, CoinTypeA> (
-            account,
-            protocol_fee_to);
-        }
     }
 
     /// Add liquidity for user
@@ -75,11 +65,7 @@ module cetus_amm::amm_router {
         amount_b_min: u128) {
         amm_config::assert_pause();
 
-        let order = amm_utils::compare_coin<CoinTypeA, CoinTypeB>();
-        assert!(
-            !comparator::is_equal(&order),  
-            error::internal(EINVALID_COIN_PAIR));
-        if (comparator::is_smaller_than(&order)) {
+        if (amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>()) {
             add_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
                 amount_a_desired,
@@ -155,11 +141,7 @@ module cetus_amm::amm_router {
         amount_b_min: u128) {
         amm_config::assert_pause();
 
-        let order = amm_utils::compare_coin<CoinTypeA, CoinTypeB>();
-        assert!(
-            !comparator::is_equal(&order),  
-            error::internal(EINVALID_COIN_PAIR));
-        if (comparator::is_smaller_than(&order)) {
+        if (amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>()) {
             remove_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
                 liquidity,
@@ -203,23 +185,33 @@ module cetus_amm::amm_router {
         
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<CoinTypeB>(sender)) coin::register<CoinTypeB>(account);
-        let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in);
-        assert!(b_out >= amount_b_out_min, 
-            error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
-        let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
+
         let (coin_a_out, coin_b_out);
         let (coin_a_fee, coin_b_fee);
-        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>();
+        if (is_forward) {
+            //calc b out amount
+            let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in, true);
+            assert!(b_out >= amount_b_out_min, error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
+            //withdraw coin a
+            let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
+            // swap
             (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, b_out, coin::zero(), 0);
         } else {
+            //calc b out amount
+            let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in, false);
+            assert!(b_out >= amount_b_out_min,  error::internal(ESWAP_B_OUT_LESSTHAN_EXPECTED));
+            //withdraw coin a
+            let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
+            // sawp
             (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, b_out);
         };
-
+        //destroy
         coin::destroy_zero(coin_a_out);
         coin::deposit(sender, coin_b_out);
         coin::destroy_zero(coin_b_fee);
-
-        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee);
+        //swap protocol fee
+        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
     }
 
     public fun swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
@@ -276,15 +268,23 @@ module cetus_amm::amm_router {
 
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<CoinTypeB>(sender)) coin::register<CoinTypeB>(account);
-        let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out);
-        assert!(a_in <= amount_a_in_max, 
-            error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
-        let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
+
         let (coin_a_out, coin_b_out);
         let (coin_a_fee, coin_b_fee);
-        if (comparator::is_smaller_than(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>())) {
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>();
+        if(is_forward) {
+            let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out, true);
+            assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
+
+            let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
+
             (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, amount_b_out, coin::zero(), 0);
         } else {
+            let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out, false);
+            assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
+
+            let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
+            
             (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_b_out);
         };
 
@@ -292,7 +292,7 @@ module cetus_amm::amm_router {
         coin::deposit(sender, coin_b_out);
         coin::destroy_zero(coin_b_fee);
 
-        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee);
+        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
     }
 
     public fun swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
@@ -332,62 +332,64 @@ module cetus_amm::amm_router {
             error::invalid_argument(EINVALID_COIN_PAIR));
 
         let(y_in, x_in, a_in) = get_amount_in_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(amount_b_out);
-         assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
+        assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
 
-         swap_coin_for_exact_coin<CoinTypeA, CoinTypeX> (account,amount_a_in_max,x_in);
-         swap_coin_for_exact_coin<CoinTypeX, CoinTypeY> (account,x_in,y_in);
-         swap_coin_for_exact_coin<CoinTypeY, CoinTypeB> (account,y_in,amount_b_out);
+        swap_coin_for_exact_coin<CoinTypeA, CoinTypeX> (account,amount_a_in_max,x_in);
+        swap_coin_for_exact_coin<CoinTypeX, CoinTypeY> (account,x_in,y_in);
+        swap_coin_for_exact_coin<CoinTypeY, CoinTypeB> (account,y_in,amount_b_out);
     }
 
-    public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128): u128 {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
-        let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
-        amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+    public fun compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in: u128, is_forward: bool): u128 {
+        if (is_forward) {
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
+            let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
+            amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+        } else {
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeB, CoinTypeA>();
+            let (reserve_b, reserve_a) = amm_swap::get_reserves<CoinTypeB, CoinTypeA>();
+            amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_b as u128), fee_numerator, fee_denominator)
+        }
     }
 
-    public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128): u128 {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
-        let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
-        amm_utils::get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+    public fun compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out: u128, is_forward: bool): u128 {
+        if (is_forward) {
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
+            let (reserve_a, reserve_b) = amm_swap::get_reserves<CoinTypeA, CoinTypeB>();
+            amm_utils::get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+        } else {
+            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeB, CoinTypeA>();
+            let (reserve_b, reserve_a) = amm_swap::get_reserves<CoinTypeB, CoinTypeA>();
+            amm_utils::get_amount_in(amount_b_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
+        }
     }
 
     public fun get_amount_out_router2<CoinTypeA, CoinTypeX, CoinTypeB>(amount_a_in: u128): (u128, u128) {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
-        let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
-        let x_out = amm_utils::get_amount_out(amount_a_in, (reserve_a as u128), (reserve_x as u128), fee_numerator, fee_denominator);
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeX, CoinTypeB>();
-        let (reserve_x, reserve_b) = amm_swap::get_reserves<CoinTypeX, CoinTypeB>();
-        let b_out =  amm_utils::get_amount_out(x_out, (reserve_x as u128), (reserve_b as u128), fee_numerator, fee_denominator);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeX>();
+        let x_out = compute_b_out<CoinTypeA, CoinTypeX>(amount_a_in, is_forward);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeX, CoinTypeB>();
+        let b_out = compute_b_out<CoinTypeX, CoinTypeB>(x_out, is_forward);
         (x_out, b_out)
     }
 
     public fun get_amount_in_router2<CoinTypeA, CoinTypeX, CoinTypeB>(amount_b_out: u128): (u128, u128) {
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeX, CoinTypeB>();
-        let (reserve_x, reserve_b) = amm_swap::get_reserves<CoinTypeX, CoinTypeB>();
-        let x_in = amm_utils::get_amount_in(amount_b_out, reserve_x, reserve_b, fee_numerator, fee_denominator);
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
-        let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
-        let a_in = amm_utils::get_amount_in(x_in, reserve_a, reserve_x, fee_numerator, fee_denominator);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeX, CoinTypeB>();
+        let x_in = compute_a_in<CoinTypeX, CoinTypeB>(amount_b_out, is_forward);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeX>();
+        let a_in = compute_a_in<CoinTypeA, CoinTypeX>(x_in, is_forward);
         (x_in, a_in)
     }
 
     public fun get_amount_out_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(amount_a_in: u128): (u128, u128, u128) {
         let (x_out, y_out) = get_amount_out_router2<CoinTypeA, CoinTypeX, CoinTypeY>(amount_a_in);
-
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeY, CoinTypeB>();
-        let (reserve_y, reserve_b) = amm_swap::get_reserves<CoinTypeY, CoinTypeB>();
-        let b_out =  amm_utils::get_amount_out(y_out, (reserve_y as u128), (reserve_b as u128), fee_numerator, fee_denominator);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeY, CoinTypeB>();
+        let b_out = compute_b_out<CoinTypeY, CoinTypeB>(y_out, is_forward);
         (x_out, y_out, b_out)
     } 
 
     public fun get_amount_in_router3<CoinTypeA, CoinTypeX, CoinTypeY, CoinTypeB>(amount_b_out: u128): (u128, u128, u128) {
         let (y_in, x_in) = get_amount_in_router2<CoinTypeX, CoinTypeY, CoinTypeB>(amount_b_out);
-
-        let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeX>();
-        let (reserve_a, reserve_x) = amm_swap::get_reserves<CoinTypeA, CoinTypeX>();
-        let a_in = amm_utils::get_amount_in(x_in, reserve_a, reserve_x, fee_numerator, fee_denominator);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeX>();
+        let a_in = compute_a_in<CoinTypeA, CoinTypeX>(x_in, is_forward);
         (y_in, x_in, a_in)
     }
-
-
 }
