@@ -78,6 +78,8 @@ module cetus_amm::amm_swap {
         coin_b_info: type_info::TypeInfo,
         account: address,
         a_in: u128,
+        a_out: u128,
+        b_in: u128,
         b_out: u128,
     }
 
@@ -86,7 +88,8 @@ module cetus_amm::amm_swap {
         coin_b_info: type_info::TypeInfo,
         account: address,
         fee_address: address,
-        fee_out: u128,
+        fee_a_out: u128,
+        fee_b_out: u128,
     }
 
     struct PoolSwapEventHandle has key {
@@ -230,7 +233,9 @@ module cetus_amm::amm_swap {
                 coin_a_info: type_info::type_of<CoinTypeA>(),
                 coin_b_info: type_info::type_of<CoinTypeB>(),
                 account: signer::address_of(account),
-                a_in: (coin::value<CoinTypeA>(&coin_a_out) as u128),
+                a_in: (coin::value<CoinTypeA>(&coin_a_in) as u128),
+                a_out: (coin::value<CoinTypeA>(&coin_a_out) as u128),
+                b_in: (coin::value<CoinTypeA>(&coin_b_in) as u128),
                 b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128) 
             }
         );
@@ -297,15 +302,15 @@ module cetus_amm::amm_swap {
     fun register_liquidity_coin<CoinTypeA, CoinTypeB>(
         account: &signer
         ) :(BurnCapability<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>, MintCapability<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>){
-        let symbol = string::utf8(b"LP-");
-        string::append(&mut symbol, coin::name<CoinTypeA>());
-        string::append_utf8(&mut symbol, b"-");
-        string::append(&mut symbol, coin::name<CoinTypeB>());
+        let name = string::utf8(b"LP-");
+        string::append(&mut name, coin::name<CoinTypeA>());
+        string::append_utf8(&mut name, b"-");
+        string::append(&mut name, coin::name<CoinTypeB>());
 
         let (burn_capability, freeze_capability, mint_capability) = coin::initialize<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(
             account,
-            string::utf8(b"CETUS AMM LP"),
-            symbol,
+            name,
+            string::utf8(b"CALP"),
             6,
             true,
         );
@@ -375,9 +380,9 @@ module cetus_amm::amm_swap {
         let (fee_handle, fee_out) = swap_fee_direct_deposit<CoinTypeA, CoinTypeB>(fee_address, coin_a, is_forward);
         if (fee_handle) { 
              if (is_forward) {
-                emit_swap_fee_event<CoinTypeA, CoinTypeB>(signer_address, fee_address, fee_out);
+                emit_swap_fee_event<CoinTypeA, CoinTypeB>(signer_address, fee_address, fee_out, 0);
              } else {
-                emit_swap_fee_event<CoinTypeB, CoinTypeA>(signer_address, fee_address, fee_out);
+                emit_swap_fee_event<CoinTypeB, CoinTypeA>(signer_address, fee_address, 0, fee_out);
              };
         }
     }
@@ -386,18 +391,18 @@ module cetus_amm::amm_swap {
         fee_address: address,
         coin_a: Coin<CoinTypeA>,
         is_forward: bool): (bool, u128) acquires Pool {
-          if (!coin::is_account_registered<CoinTypeA>(fee_address)) {
+          if (coin::is_account_registered<CoinTypeA>(fee_address)) {
             let a_value = coin::value(&coin_a);
             coin::deposit(fee_address, coin_a);
-            return (true, (a_value as u128))
+            (true, (a_value as u128))
          } else {
              if (is_forward) {
                 return_back_to_lp_pool<CoinTypeA, CoinTypeB>(coin_a, coin::zero());
              } else {
                 return_back_to_lp_pool<CoinTypeB, CoinTypeA>(coin::zero(), coin_a);
              };
-         };
-        (true, (0 as u128))
+             (false, (0 as u128))
+         }
     }
 
     fun return_back_to_lp_pool<CoinTypeA, CoinTypeB>(
@@ -412,7 +417,8 @@ module cetus_amm::amm_swap {
     fun emit_swap_fee_event<CoinTypeA, CoinTypeB> (
         signer_address: address,
         fee_address: address,
-        fee_out: u128
+        fee_a_out: u128,
+        fee_b_out: u128
     ) acquires PoolSwapEventHandle {
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<SwapFeeEvent>(
@@ -422,7 +428,8 @@ module cetus_amm::amm_swap {
                 coin_b_info: type_info::type_of<CoinTypeB>(),
                 account: signer_address,
                 fee_address: fee_address,
-                fee_out: fee_out,
+                fee_a_out: fee_a_out,
+                fee_b_out: fee_b_out,
             }
         );
     }
