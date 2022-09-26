@@ -7,4 +7,4 @@ Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-fram
 
 [addresses]
 cetus_amm =  "0x0"
-sui = ”0x2“
+sui = "0x2"
