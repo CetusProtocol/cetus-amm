@@ -6,4 +6,5 @@ version = "0.0.1"
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "main" }
 
 [addresses]
-cetus-amm =  "0x0"
+cetus_amm =  "0x0"
+sui = ”0x2“
