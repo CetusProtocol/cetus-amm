@@ -25,7 +25,7 @@ module cetus_amm::amm_script {
     entry fun swap_exact_coinA_for_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_a: &mut Coin<CoinTypeA>,
+        coin_a: Coin<CoinTypeA>,
         amount_a_in: u64,
         amount_b_out_min: u64,
         ctx: &mut TxContext
@@ -43,7 +43,7 @@ module cetus_amm::amm_script {
     entry fun swap_exact_coinB_for_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_b: &mut Coin<CoinTypeB>,
+        coin_b: Coin<CoinTypeB>,
         amount_b_in: u64,
         amount_a_out_min: u64,
         ctx: &mut TxContext
@@ -61,7 +61,7 @@ module cetus_amm::amm_script {
     entry fun swap_coinA_for_exact_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_a: &mut Coin<CoinTypeA>,
+        coin_a: Coin<CoinTypeA>,
         amount_a_max: u64,
         amount_b_out: u64,
         ctx: &mut TxContext
@@ -79,7 +79,7 @@ module cetus_amm::amm_script {
     entry fun swap_coinB_for_exact_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_b: &mut Coin<CoinTypeB>,
+        coin_b: Coin<CoinTypeB>,
         amount_b_max: u64,
         amount_a_out: u64,
         ctx: &mut TxContext
@@ -99,15 +99,17 @@ module cetus_amm::amm_script {
         pause_status: &GlobalPauseStatus,
         coin_a: Coin<CoinTypeA>,
         coin_b: Coin<CoinTypeB>,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
         amount_a_min: u64,
         amount_b_min: u64,
         ctx: &mut TxContext   
     ) {
         amm_route::add_liquidity(
             pool,
-            coin_a,coin_b,
+            pause_status,
+            coin_a,
+            coin_b,
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
@@ -118,14 +120,17 @@ module cetus_amm::amm_script {
     entry fun remove_liquidity<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        coin_lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        amount_lp: u64,
         amount_a_min: u64,
         amount_b_min: u64,
         ctx: &mut TxContext
     ) {
         amm_route::remove_liquidity(
             pool,
-            lp,
+            pause_status,
+            coin_lp,
+            amount_lp,
             amount_a_min,
             amount_b_min,
             ctx

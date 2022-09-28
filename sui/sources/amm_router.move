@@ -3,27 +3,38 @@ module cetus_amm::amm_route {
     use cetus_amm::amm_config::{Self, GlobalPauseStatus};
     use cetus_amm::amm_utils;
     use sui::coin::{Self,Coin};
-    use sui::tx_context::{TxContext};
-    use sui::balance;
+    use sui::tx_context::{Self, TxContext};
+    use sui::balance::{Self, Balance};
+    use sui::transfer;
 
     const ENotEnough: u64 = 1;
-    const EPOOLPAUSE: u64 = 2;
-    const ESwapOutLessthanExpected: u64 = 3;
-    const ESwapInOverLimitMax: u64 = 4;
-    const EWrongFee: u64 = 5;
+    const ESwapOutLessthanExpected: u64 = 2;
+    const ESwapInOverLimitMax: u64 = 3;
+    const EWrongFee: u64 = 4;
+    const ELiquidityInsufficientBAmount: u64 = 5;
+    const ELiquidityInsufficientAAmount: u64 = 6;
+    const ELiquidityOverLimitADesired: u64 = 7;
+    const ELiquidityAddLiquidityFailed: u64 = 8;
 
     public fun add_liquidity<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        pause_status: &GlobalPauseStatus,
         coin_a: Coin<CoinTypeA>,
         coin_b: Coin<CoinTypeB>,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
         amount_a_min: u64,
         amount_b_min: u64,
         ctx: &mut TxContext) {
+
+        assert!(coin::value(&coin_a) >= amount_a_desired, ENotEnough);
+        assert!(coin::value(&coin_b) >= amount_b_desired, ENotEnough);
+        amm_config::assert_pause(pause_status);
+
         add_liquidity_internal(
             pool,
-            coin_a,coin_b,
+            coin_a,
+            coin_b,
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
@@ -36,41 +47,103 @@ module cetus_amm::amm_route {
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         coin_a: Coin<CoinTypeA>,
         coin_b: Coin<CoinTypeB>,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
         amount_a_min: u64,
         amount_b_min: u64,
         ctx: &mut TxContext) {
         let (amount_a, amount_b) = calculate_amount_for_liquidity_internal<CoinTypeA, CoinTypeB>(
             pool,
-            coin_a,coin_b,
             amount_a_desired,
             amount_b_desired,
             amount_a_min,
             amount_b_min
         );
 
+        let balance_a = coin::into_balance(coin_a);
+        let to_add_a = balance::split(&mut balance_a, amount_a);
+        let balance_b = coin::into_balance(coin_b);
+        let to_add_b = balance::split(&mut balance_b, amount_b);
+        let coin_liquidity = amm_swap::mint_and_emit_event(
+            pool,
+            to_add_a,
+            to_add_b,
+            amount_a,
+            amount_b,
+            ctx
+        );
+        assert!(coin::value(&coin_liquidity) > 0, ELiquidityAddLiquidityFailed);
+        coin::keep(coin_liquidity, ctx);
+
+        reture_back_or_delete(balance_a, ctx);
+        reture_back_or_delete(balance_b, ctx);
     }
 
     fun calculate_amount_for_liquidity_internal<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
-        coin_a: Coin<CoinTypeA>,
-        coin_b: Coin<CoinTypeB>,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
         amount_a_min: u64,
         amount_b_min: u64): (u64, u64) {
-            (0,0)
+        let (reserve_a, reserve_b) = amm_swap::get_reserves(pool);
+        if(reserve_a == 0 && reserve_b == 0) {
+            (amount_a_desired, amount_b_desired)
+        } else {
+            let amount_b_optimal = amm_utils::quote(amount_a_desired, reserve_a, reserve_b);
+            if (amount_b_optimal <= amount_b_desired) {
+                assert!(amount_b_optimal >= amount_b_min, ELiquidityInsufficientBAmount);
+                (amount_a_desired, amount_b_optimal)
+            } else {
+                let amount_a_optimal = amm_utils::quote(amount_b_desired, reserve_b, reserve_a);
+                assert!(amount_a_optimal <= amount_a_desired, ELiquidityOverLimitADesired);
+                assert!(amount_a_optimal >= amount_a_min, ELiquidityInsufficientAAmount);
+                (amount_a_optimal, amount_b_desired)
+            } 
+        }
     }
 
     public fun remove_liquidity<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
-        lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        pause_status: &GlobalPauseStatus,
+        coin_lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        amount_lp: u64,
         amount_a_min: u64,
         amount_b_min: u64,
         ctx: &mut TxContext) {
+        assert!(coin::value(&coin_lp) >= amount_lp, ENotEnough);
+        amm_config::assert_pause(pause_status);
 
+        remove_liquidity_internal(
+            pool,
+            coin_lp,
+            amount_lp,
+            amount_a_min,
+            amount_b_min,
+            ctx
+        );
     }
+
+    fun remove_liquidity_internal<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        coin_lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        amount_lp: u64,
+        amount_a_min: u64,
+        amount_b_min: u64,
+        ctx: &mut TxContext) {
+            let balance_lp = coin::into_balance(coin_lp);
+            let to_burn = balance::split(&mut balance_lp, amount_lp);
+            let (coin_a, coin_b) = amm_swap::burn_and_emit_event(
+                pool,
+                to_burn,
+                ctx
+            );
+
+            assert!(coin::value(&coin_a) >= amount_a_min, ELiquidityInsufficientAAmount);
+            assert!(coin::value(&coin_b) >= amount_b_min, ELiquidityInsufficientBAmount);
+            coin::keep(coin_a, ctx);
+            coin::keep(coin_b, ctx);
+            reture_back_or_delete(balance_lp, ctx);
+        }
 
     public fun init_pool<CoinTypeA, CoinTypeB>(
         trade_fee_numerator: u64,
@@ -94,19 +167,18 @@ module cetus_amm::amm_route {
     public fun swap_exact_coinA_for_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_a: &mut Coin<CoinTypeA>,
+        coin_a: Coin<CoinTypeA>,
         amount_a_in: u64,
         amount_b_out_min: u64,
         ctx: &mut TxContext
     ) {
-        assert!(amm_config::get_pause_status(pause_status) == false, EPOOLPAUSE);
-        assert!(coin::value(coin_a) >= amount_a_in, ENotEnough);
+        assert!(coin::value(&coin_a) >= amount_a_in, ENotEnough);
+        amm_config::assert_pause(pause_status);
 
         let b_out = compute_out<CoinTypeA, CoinTypeB>(pool, amount_a_in, true);
         assert!(b_out >= amount_b_out_min, ESwapOutLessthanExpected);
-        let balance_a = coin::balance_mut(coin_a);
-        let balance_a_in = balance::split(balance_a, amount_a_in);
-
+        let balance_a = coin::into_balance(coin_a);
+        let balance_a_in = balance::split(&mut balance_a, amount_a_in);
         let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
             amm_swap::swap_and_emit_event(
                 pool, 
@@ -120,23 +192,25 @@ module cetus_amm::amm_route {
         coin::keep(coin::from_balance(balance_b_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
         balance::destroy_zero(balance_b_fee);
+
+        reture_back_or_delete(balance_a, ctx);
     } 
 
     public fun swap_exact_coinB_for_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_b: &mut Coin<CoinTypeB>,
+        coin_b: Coin<CoinTypeB>,
         anount_b_in: u64,
         amount_a_out_min: u64,
         ctx: &mut TxContext
     ) {
-        assert!(amm_config::get_pause_status(pause_status) == false, EPOOLPAUSE);
-        assert!(coin::value(coin_b) >= anount_b_in, ENotEnough);
+        assert!(coin::value(&coin_b) >= anount_b_in, ENotEnough);
+        amm_config::assert_pause(pause_status);
 
         let a_out = compute_out(pool, anount_b_in, true);
         assert!(a_out >= amount_a_out_min, ESwapOutLessthanExpected);
-        let balance_b = coin::balance_mut(coin_b);
-        let balance_b_in = balance::split(balance_b, anount_b_in);
+        let balance_b = coin::into_balance(coin_b);
+        let balance_b_in = balance::split(&mut balance_b, anount_b_in);
 
         let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
             amm_swap::swap_and_emit_event(
@@ -151,24 +225,26 @@ module cetus_amm::amm_route {
         coin::keep(coin::from_balance(balance_a_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
         balance::destroy_zero(balance_a_fee);
+
+        reture_back_or_delete(balance_b, ctx);
     }
 
     public fun swap_coinA_for_exact_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_a: &mut Coin<CoinTypeA>,
+        coin_a: Coin<CoinTypeA>,
         amount_a_max: u64,
         amount_b_out: u64,
         ctx: &mut TxContext
     ) {
-        assert!(amm_config::get_pause_status(pause_status) == false, EPOOLPAUSE);
-        assert!(coin::value(coin_a) >= amount_a_max, ENotEnough);
+        assert!(coin::value(&coin_a) >= amount_a_max, ENotEnough);
+        amm_config::assert_pause(pause_status);
 
         let a_in = compute_in(pool, amount_b_out, true);
         assert!(a_in <= amount_a_max, ESwapInOverLimitMax);
 
-        let balance_a = coin::balance_mut(coin_a);
-        let balance_a_in = balance::split(balance_a, a_in);
+        let balance_a = coin::into_balance(coin_a);
+        let balance_a_in = balance::split(&mut balance_a, a_in);
 
         let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
             amm_swap::swap_and_emit_event(
@@ -184,24 +260,25 @@ module cetus_amm::amm_route {
         amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
         balance::destroy_zero(balance_b_fee);
 
+        reture_back_or_delete(balance_a, ctx);
     }
 
     public fun swap_coinB_for_exact_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
-        coin_b: &mut Coin<CoinTypeB>,
+        coin_b: Coin<CoinTypeB>,
         amount_b_max: u64,
         amount_a_out: u64,
         ctx: &mut TxContext
     ) {
-        assert!(amm_config::get_pause_status(pause_status) == false, EPOOLPAUSE);
-        assert!(coin::value(coin_b) >= amount_b_max, ENotEnough);
+        assert!(coin::value(&coin_b) >= amount_b_max, ENotEnough);
+        amm_config::assert_pause(pause_status);
 
         let b_in = compute_in(pool, amount_a_out, false);
         assert!(b_in <= amount_b_max, ESwapInOverLimitMax);
 
-        let balance_b = coin::balance_mut(coin_b);
-        let balance_b_in = balance::split(balance_b, b_in);
+        let balance_b = coin::into_balance(coin_b);
+        let balance_b_in = balance::split(&mut balance_b, b_in);
 
         let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
             amm_swap::swap_and_emit_event(
@@ -216,6 +293,8 @@ module cetus_amm::amm_route {
         coin::keep(coin::from_balance(balance_a_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
         balance::destroy_zero(balance_a_fee);
+
+        reture_back_or_delete(balance_b, ctx);
     }
 
     public fun set_global_pause_status(
@@ -278,6 +357,17 @@ module cetus_amm::amm_route {
         ctx: &mut TxContext
     ) {
         amm_swap::claim_fee(pool, ctx);
+    }
+
+    fun reture_back_or_delete<CoinType>(
+        balance: Balance<CoinType>,
+        ctx: &mut TxContext
+    ) {
+        if(balance::value(&balance) > 0) {
+            transfer::transfer(coin::from_balance(balance , ctx), tx_context::sender(ctx));
+        } else {
+            balance::destroy_zero(balance);
+        }
     }
 
 }

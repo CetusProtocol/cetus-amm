@@ -1,15 +1,20 @@
 module cetus_amm::amm_swap {
     use sui::object::{Self, UID, ID};
-    use sui::coin;
+    use sui::coin::{Self, Coin};
     use sui::balance::{Self, Supply, Balance};
     use sui::transfer;
     use sui::event;
+    use sui::math;
     use sui::tx_context::{Self, TxContext};
-    use cetus_amm::amm_config::{new_global_pause_status};
+    use cetus_amm::amm_config::{new_global_pause_status_and_shared};
     use cetus_amm::amm_math;
+
+    const MINIMUM_LIQUIDITY: u64 = 10;
 
     const ECoinInsufficient: u64 = 0;
     const ESwapoutCalcInvalid: u64 = 1;
+    const ELiquidityInsufficientMinted: u64 = 2;
+    const ELiquiditySwapBurnCalcInvalid: u64 = 3;
 
     struct AdminCap has key {
         id: UID,
@@ -90,9 +95,7 @@ module cetus_amm::amm_swap {
             tx_context::sender(ctx)
         );
 
-        let global_paulse_status = new_global_pause_status(ctx);
-        let id = object::id(&global_paulse_status);
-        transfer::share_object (global_paulse_status);
+        let id = new_global_pause_status_and_shared(ctx);
         event::emit(InitEvent{
             sender: tx_context::sender(ctx),
             global_paulse_status_id: id
@@ -164,56 +167,56 @@ module cetus_amm::amm_swap {
 
     public fun swap_and_emit_event<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
-        coin_a_in: Balance<CoinTypeA>,
-        coin_b_out: u64,
-        coin_b_in: Balance<CoinTypeB>,
-        coin_a_out: u64,
+        balance_a_in: Balance<CoinTypeA>,
+        b_out: u64,
+        balance_b_in: Balance<CoinTypeB>,
+        a_out: u64,
         ctx: &mut TxContext
     ):(Balance<CoinTypeA>, Balance<CoinTypeB>, Balance<CoinTypeA>, Balance<CoinTypeB>) {
-        let coin_a_in_value = balance::value(&coin_a_in);
-        let coin_b_in_value = balance::value(&coin_b_in);
+        let balance_a_in_value = balance::value(&balance_a_in);
+        let balance_b_in_value = balance::value(&balance_b_in);
 
-        let (coin_a_out, coin_b_out, coin_a_fee, con_b_fee) = swap(pool, coin_a_in, coin_b_out, coin_b_in, coin_a_out);
+        let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = swap(pool, balance_a_in, b_out, balance_b_in, a_out);
         event::emit(SwapEvent{
             sender: tx_context::sender(ctx),
             pool_id: object::id(pool),
-            amount_a_in: coin_a_in_value,
-            amount_a_out: balance::value(&coin_a_out),
-            amount_b_in: coin_b_in_value,
-            amount_b_out: balance::value(&coin_b_out),
+            amount_a_in: balance_a_in_value,
+            amount_a_out: balance::value(&balance_a_out),
+            amount_b_in: balance_b_in_value,
+            amount_b_out: balance::value(&balance_b_out),
         });
-        (coin_a_out, coin_b_out, coin_a_fee, con_b_fee)
+        (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee)
     }
 
     fun swap<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
-        coin_a_in: Balance<CoinTypeA>,
-        coin_b_out: u64,
-        coin_b_in: Balance<CoinTypeB>,
-        coin_a_out: u64
+        balance_a_in: Balance<CoinTypeA>,
+        b_out: u64,
+        balance_b_in: Balance<CoinTypeB>,
+        a_out: u64
     ):(Balance<CoinTypeA>, Balance<CoinTypeB>, Balance<CoinTypeA>, Balance<CoinTypeB>) {
-        let a_in_value = balance::value(&coin_a_in);
-        let b_in_value = balance::value(&coin_b_in);
+        let balance_a_in_value = balance::value(&balance_a_in);
+        let balance_b_in_value = balance::value(&balance_b_in);
         assert!(
-            a_in_value > 0 || b_in_value > 0,
+            balance_a_in_value > 0 || balance_b_in_value > 0,
             ECoinInsufficient
         );
 
 
-        balance::join(&mut pool.coin_a, coin_a_in);
-        balance::join(&mut pool.coin_b, coin_b_in);
+        balance::join(&mut pool.coin_a, balance_a_in);
+        balance::join(&mut pool.coin_b, balance_b_in);
         let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>(pool);
 
-        let coin_a_swapped = balance::split(&mut pool.coin_a, coin_a_out);
-        let coin_b_swapped = balance::split(&mut pool.coin_b, coin_b_out);
+        let balance_a_swapped = balance::split(&mut pool.coin_a, a_out);
+        let balance_b_swapped = balance::split(&mut pool.coin_b, b_out);
 
         {
             let a_reserve_new = balance::value(&pool.coin_a);
             let b_reserve_new = balance::value(&pool.coin_b);
             let (fee_numerator, fee_denominator) = get_trade_fee<CoinTypeA, CoinTypeB>(pool);
             
-            let a_adjusted = a_reserve_new * fee_denominator - a_in_value * fee_numerator;
-            let b_adjusted = b_reserve_new * fee_denominator - b_in_value * fee_numerator;
+            let a_adjusted = a_reserve_new * fee_denominator - balance_a_in_value * fee_numerator;
+            let b_adjusted = b_reserve_new * fee_denominator - balance_b_in_value * fee_numerator;
 
             assert!(
                 amm_math::safe_compare_mul_u64(a_adjusted, b_adjusted, a_reserve, b_reserve), 
@@ -221,9 +224,9 @@ module cetus_amm::amm_swap {
         };
 
         let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate(pool);
-        let a_swap_fee = balance::split(&mut pool.coin_a, amm_math::safe_mul_div_u64(a_in_value, protocol_fee_numberator, protocol_fee_denominator));
-        let b_swap_fee = balance::split(&mut pool.coin_b, amm_math::safe_mul_div_u64(b_in_value, protocol_fee_numberator, protocol_fee_denominator));
-        (coin_a_swapped, coin_b_swapped, a_swap_fee, b_swap_fee)
+        let a_swap_fee = balance::split(&mut pool.coin_a, amm_math::safe_mul_div_u64(balance_a_in_value, protocol_fee_numberator, protocol_fee_denominator));
+        let b_swap_fee = balance::split(&mut pool.coin_b, amm_math::safe_mul_div_u64(balance_b_in_value, protocol_fee_numberator, protocol_fee_denominator));
+        (balance_a_swapped, balance_b_swapped, a_swap_fee, b_swap_fee)
     }
 
     fun calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>(pool: &Pool<CoinTypeA, CoinTypeB>): (u64, u64) {
@@ -272,11 +275,11 @@ module cetus_amm::amm_swap {
             ECoinInsufficient
         );
 
-        let a_fee_balance = balance::split(&mut pool.coin_a_admin, a_fee_value);
-        let b_fee_balance = balance::split(&mut pool.coin_b_admin, b_fee_value);
+        let balance_a_fee = balance::split(&mut pool.coin_a_admin, a_fee_value);
+        let balance_b_fee = balance::split(&mut pool.coin_b_admin, b_fee_value);
 
-        coin::keep(coin::from_balance(a_fee_balance, ctx), ctx);
-        coin::keep(coin::from_balance(b_fee_balance, ctx), ctx);
+        coin::keep(coin::from_balance(balance_a_fee, ctx), ctx);
+        coin::keep(coin::from_balance(balance_b_fee, ctx), ctx);
 
         event::emit(ClaimFeeEvent{
             sender: tx_context::sender(ctx),
@@ -284,6 +287,102 @@ module cetus_amm::amm_swap {
             amount_a: a_fee_value,
             amount_b: b_fee_value,
         });
+    }
+
+    public fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        balance_a: Balance<CoinTypeA>,
+        balance_b: Balance<CoinTypeB>,
+        amount_a_desired: u64,
+        amount_b_desired: u64,
+        ctx: &mut TxContext
+    ): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> {
+        let coin_liquidity = mint(pool, balance_a, balance_b, ctx);
+        event::emit(LiquidityEvent{
+            sender: tx_context::sender(ctx),
+            pool_id: object::id(pool),
+            is_add_liquidity: true,
+            liquidity: coin::value(&coin_liquidity),
+            amount_a: amount_a_desired,
+            amount_b: amount_b_desired,
+        });
+        coin_liquidity
+    }
+
+    fun mint<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        balance_a: Balance<CoinTypeA>,
+        balance_b: Balance<CoinTypeB>,
+        ctx: &mut TxContext
+    ): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> {
+        let (reserve_a, reserve_b) = get_reserves(pool);
+
+        let amount_a = balance::value(&balance_a);
+        let amonut_b = balance::value(&balance_b);
+
+        let total_supply = balance::supply_value(&pool.lp_supply);
+        let liquidity: u64;
+        if (total_supply == 0) {
+            liquidity = math::sqrt(amount_a * amonut_b) - MINIMUM_LIQUIDITY;
+            let balance_lp_locked = balance::increase_supply(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
+            balance::join(&mut pool.lp_locked, balance_lp_locked);
+        } else {
+            liquidity = math::min(
+                amm_math::safe_mul_div_u64(amount_a, total_supply, reserve_a),
+                amm_math::safe_mul_div_u64(amonut_b, total_supply, reserve_b));
+        };
+
+        assert!(liquidity > 0, ELiquidityInsufficientMinted);
+
+        balance::join(&mut pool.coin_a, balance_a);
+        balance::join(&mut pool.coin_b, balance_b);
+
+        coin::from_balance(
+            balance::increase_supply(
+                &mut pool.lp_supply,
+                liquidity
+            ), ctx)
+    }
+
+    public fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        to_burn: Balance<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        ctx:  &mut TxContext
+    ): (Coin<CoinTypeA>, Coin<CoinTypeB>) {
+        let to_burn_value = balance::value(&to_burn);
+        let (coin_a, coin_b) = burn(pool, to_burn, ctx);
+
+        event::emit(LiquidityEvent{
+            sender: tx_context::sender(ctx),
+            pool_id: object::id(pool),
+            is_add_liquidity: false,
+            liquidity: to_burn_value,
+            amount_a: coin::value(&coin_a),
+            amount_b: coin::value(&coin_b),
+        });
+
+        (coin_a, coin_b)
+    }
+
+    fun burn<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        to_burn: Balance<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
+        ctx:  &mut TxContext
+    ): (Coin<CoinTypeA>, Coin<CoinTypeB>) {
+        let to_burn_value = balance::value(&to_burn);
+
+        let (reserve_a, reserve_b) = get_reserves(pool);
+        let total_supply = balance::supply_value(&pool.lp_supply);
+
+        let amount_a = amm_math::safe_mul_div_u64(to_burn_value, reserve_a, total_supply);
+        let amount_b = amm_math::safe_mul_div_u64(to_burn_value, reserve_b, total_supply);
+        assert!(amount_a > 0 && amount_b > 0, ELiquiditySwapBurnCalcInvalid);
+
+        balance::decrease_supply(&mut pool.lp_supply, to_burn);
+
+        let coin_a = coin::from_balance(balance::split(&mut pool.coin_a, amount_a), ctx);
+        let coin_b = coin::from_balance(balance::split(&mut pool.coin_b, amount_b), ctx);
+        (coin_a, coin_b)
     }
 
 }

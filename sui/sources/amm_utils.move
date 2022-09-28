@@ -35,4 +35,10 @@ module cetus_amm::amm_utils {
         let denominator = reserve_in * fee_denumerator + amount_in_with_fee;
         amm_math::safe_mul_div_u64(amount_in_with_fee, reserve_out, denominator)
     }
+
+    public fun quote(amount_a: u64, reserve_a: u64, reserve_b: u64): u64 {
+        assert!(amount_a > 0, EParamInvalid);
+        assert!(reserve_a > 0 && reserve_b > 0, EParamInvalid);
+        amm_math::safe_mul_div_u64(amount_a, reserve_b, reserve_a)
+    }
 }
