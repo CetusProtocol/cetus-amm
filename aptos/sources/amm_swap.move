@@ -225,6 +225,8 @@ module cetus_amm::amm_swap {
         coin_b_in: Coin<CoinTypeB>,
         coin_a_out: u128
     ) :(Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
+        let coin_a_in_value = (coin::value<CoinTypeA>(&coin_a_in) as u128);
+        let coin_b_in_value = (coin::value<CoinTypeB>(&coin_b_in) as u128);
         let (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap<CoinTypeA, CoinTypeB>(coin_a_in, coin_b_out, coin_b_in, coin_a_out);
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<SwapEvent>(
@@ -233,9 +235,9 @@ module cetus_amm::amm_swap {
                 coin_a_info: type_info::type_of<CoinTypeA>(),
                 coin_b_info: type_info::type_of<CoinTypeB>(),
                 account: signer::address_of(account),
-                a_in: (coin::value<CoinTypeA>(&coin_a_in) as u128),
+                a_in: coin_a_in_value,
                 a_out: (coin::value<CoinTypeA>(&coin_a_out) as u128),
-                b_in: (coin::value<CoinTypeA>(&coin_b_in) as u128),
+                b_in: coin_b_in_value,
                 b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128) 
             }
         );

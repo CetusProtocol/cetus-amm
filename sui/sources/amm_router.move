@@ -207,7 +207,7 @@ module cetus_amm::amm_route {
         assert!(coin::value(&coin_b) >= anount_b_in, ENotEnough);
         amm_config::assert_pause(pause_status);
 
-        let a_out = compute_out(pool, anount_b_in, true);
+        let a_out = compute_out(pool, anount_b_in, false);
         assert!(a_out >= amount_a_out_min, ESwapOutLessthanExpected);
         let balance_b = coin::into_balance(coin_b);
         let balance_b_in = balance::split(&mut balance_b, anount_b_in);
@@ -310,7 +310,7 @@ module cetus_amm::amm_route {
 
     fun compute_out<CoinTypeA, CoinTypeB>(pool: &Pool<CoinTypeA, CoinTypeB>, amount_in: u64, is_a_to_b: bool): u64 {
         let (fee_numerator, fee_denominator) = amm_swap::get_trade_fee(pool);
-        let (reserve_a, reserve_b) = amm_swap::get_trade_fee(pool);
+        let (reserve_a, reserve_b) = amm_swap::get_reserves(pool);
 
         if (is_a_to_b) {
             amm_utils::get_amount_out(amount_in, reserve_a, reserve_b, fee_numerator, fee_denominator)
@@ -322,7 +322,7 @@ module cetus_amm::amm_route {
 
     fun compute_in<CoinTypeA, CoinTypeB>(pool: &Pool<CoinTypeA, CoinTypeB>, amount_out: u64, is_a_to_b: bool): u64 {
         let (fee_numerator, fee_denominator) = amm_swap::get_trade_fee(pool);
-        let (reserve_a, reserve_b) = amm_swap::get_trade_fee(pool);
+        let (reserve_a, reserve_b) = amm_swap::get_reserves(pool);
 
         if (is_a_to_b) {
             amm_utils::get_amount_in(amount_out, reserve_a, reserve_b, fee_numerator, fee_denominator)
