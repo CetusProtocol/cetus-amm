@@ -4,7 +4,7 @@ module cetus_amm::amm_utils {
     use aptos_std::type_info;
     use aptos_std::comparator;
     use cetus_amm::amm_math;
-    use aptos_std::debug;
+    
     //
     // Errors
     //

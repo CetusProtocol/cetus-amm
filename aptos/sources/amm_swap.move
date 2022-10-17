@@ -58,10 +58,8 @@ module cetus_amm::amm_swap {
         account: address,
         coin_a_info: type_info::TypeInfo,
         coin_b_info: type_info::TypeInfo,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
-        amount_a_min: u128,
-        amount_b_min: u128,
+        amount_a: u128,
+        amount_b: u128,
     }
 
     struct RemoveLiquidityEvent has store, drop {
@@ -69,8 +67,8 @@ module cetus_amm::amm_swap {
         account: address,
         coin_a_info: type_info::TypeInfo,
         coin_b_info: type_info::TypeInfo,
-        amount_a_min: u128,
-        amount_b_min: u128,
+        amount_a: u128,
+        amount_b: u128,
     }
 
     struct SwapEvent has store, drop {
@@ -133,11 +131,9 @@ module cetus_amm::amm_swap {
     public fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
         account: &signer,
         coinA: Coin<CoinTypeA>, 
-        coinB: Coin<CoinTypeB>,
-        amount_a_desired: u128,
-        amount_b_desired: u128,
-        amount_a_min: u128,
-        amount_b_min: u128): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
+        coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
+        let amount_a = (coin::value(&coinA) as u128);
+        let amount_b = (coin::value(&coinB) as u128);
         let liquidity_token = mint<CoinTypeA, CoinTypeB>(coinA,coinB);
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
@@ -145,10 +141,8 @@ module cetus_amm::amm_swap {
             account: signer::address_of(account),
             coin_a_info:type_info::type_of<CoinTypeA>(),
             coin_b_info:type_info::type_of<CoinTypeB>(),
-            amount_a_desired,
-            amount_b_desired,
-            amount_a_min,
-            amount_b_min,
+            amount_a,
+            amount_b
         });
         liquidity_token
     }
@@ -186,19 +180,19 @@ module cetus_amm::amm_swap {
 
     public fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
         account: &signer,
-        to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
-        amount_a_min: u128,
-        amount_b_min: u128) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
+        to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
         let liquidity = (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&to_burn) as u128);
         let (a_token, b_token) = burn<CoinTypeA, CoinTypeB>(to_burn);
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
+        let amount_a = (coin::value<CoinTypeA>(&a_token) as u128);
+        let amount_b = (coin::value<CoinTypeB>(&b_token) as u128);
         event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
             liquidity,
             account: signer::address_of(account),
             coin_a_info:type_info::type_of<CoinTypeA>(),
             coin_b_info:type_info::type_of<CoinTypeB>(),
-            amount_a_min,
-            amount_b_min,
+            amount_a,
+            amount_b,
         });
         (a_token, b_token)
     }

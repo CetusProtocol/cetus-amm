@@ -100,11 +100,7 @@ module cetus_amm::amm_router {
         let liquidity_token = amm_swap::mint_and_emit_event<CoinTypeA, CoinTypeB>(
                 account,
                 coinA,
-                coinB,
-                amount_a_desired,
-                amount_b_desired,
-                amount_a_min,
-                amount_b_min);
+                coinB);
         assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
         let sender = signer::address_of(account);
         if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coin::register<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
@@ -164,9 +160,7 @@ module cetus_amm::amm_router {
         let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
         let (token_a, token_b) = amm_swap::burn_and_emit_event(
             account,
-            liquidity_token,
-            amount_a_min,
-            amount_b_min);
+            liquidity_token);
         assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
         assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
         let sender = signer::address_of(account);
