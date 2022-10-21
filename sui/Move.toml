@@ -1,0 +1,10 @@
+[package]
+name = "Cetus-AMM"
+version = "0.0.1"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework", rev = "devnet" }
+
+[addresses]
+cetus_amm =  "0x0"
+sui = "0x2"
