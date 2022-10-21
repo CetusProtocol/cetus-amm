@@ -27,6 +27,7 @@ module cetus_amm::amm_swap {
     const ESWAPOUT_CALC_INVALID: u64 = 4006;
     const EPOOL_DOSE_NOT_EXIST: u64 = 4007;
     const EPOOL_ALREADY_EXISTS: u64 = 4008;
+    const ELIQUIDITY_CALC_INVALID: u64 = 4009;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
@@ -166,6 +167,8 @@ module cetus_amm::amm_swap {
             let locked_liquidity = coin::mint<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>((MINIMUM_LIQUIDITY as u64), &pool.mint_capability); // permanently lock the first MINIMUM_LIQUIDITY tokens
             coin::merge(&mut pool.locked_liquidity, locked_liquidity);
         } else {
+            assert!(amountB == amm_math::quote(amountA, reserve_a, reserve_b)
+             || amountA == amm_math::quote(amountB, reserve_b, reserve_a), error::internal(ELIQUIDITY_CALC_INVALID));
             liquidity = min(amm_math::safe_mul_div_u128(amountA,total_supply,reserve_a), 
                             amm_math::safe_mul_div_u128(amountB,total_supply,reserve_b));
         };
@@ -264,13 +267,22 @@ module cetus_amm::amm_swap {
             let b_reserve_new = coin::value(&pool.coin_b);
             let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
             
-            let a_adjusted = (a_reserve_new as u128) * (fee_denominator as u128) - (a_in_value as u128) * (fee_numerator as u128);
-            let b_adjusted = (b_reserve_new as u128) * (fee_denominator as u128) - (b_in_value as u128) * (fee_numerator as u128);
+            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
+                a_reserve_new, 
+                b_reserve_new, 
+                a_in_value, 
+                b_in_value, 
+                fee_numerator, 
+                fee_denominator);
 
-            let cmp_order = amm_math::safe_compare_mul_u128(a_adjusted, b_adjusted, (a_reserve as u128), (b_reserve as u128));
-             assert!(
-                (EQUAL == cmp_order || GREATER_THAN == cmp_order), 
-                 error::internal(ESWAPOUT_CALC_INVALID));
+            
+            assert_lp_value_incr(
+                a_reserve,
+                b_reserve,
+                a_adjusted,
+                b_adjusted,
+                (fee_denominator as u128)
+            );
         };
 
         let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>();
@@ -437,5 +449,31 @@ module cetus_amm::amm_swap {
             assert!(exists<Pool<CoinTypeB, CoinTypeA>>(amm_config::admin_address()), EPOOL_DOSE_NOT_EXIST);
             false
         }
+    }
+
+    fun new_reserves_adjusted(
+        a_reserve: u64,
+        b_reserve: u64,
+        a_in_val: u64,
+        b_in_val: u64,
+        fee_numerator: u64,
+        fee_denominator: u64
+    ) : (u128, u128) {
+        let a_adjusted = (a_reserve as u128) * (fee_denominator as u128) - (a_in_val as u128) * (fee_numerator as u128);
+        let b_adjusted = (b_reserve as u128) * (fee_denominator as u128) - (b_in_val as u128) * (fee_numerator as u128);
+        (a_adjusted, b_adjusted)
+    }
+
+    fun assert_lp_value_incr(
+        a_reserve: u128,
+        b_reserve: u128,
+        a_adjusted: u128,
+        b_adjusted: u128,
+        fee_denominator: u128
+    ) {
+        let cmp_order = amm_math::safe_compare_mul_u128(a_adjusted, b_adjusted, (a_reserve as u128) * (fee_denominator as u128), (b_reserve as u128) * (fee_denominator as u128));
+        assert!(
+            (EQUAL == cmp_order || GREATER_THAN == cmp_order), 
+            error::internal(ESWAPOUT_CALC_INVALID));
     }
 }
