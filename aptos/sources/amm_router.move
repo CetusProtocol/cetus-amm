@@ -286,7 +286,7 @@ module cetus_amm::amm_router {
         coin::deposit(sender, coin_b_out);
         coin::destroy_zero(coin_b_fee);
 
-        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
+        amm_swap::handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
     }
 
     public fun swap_coin_for_exact_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
