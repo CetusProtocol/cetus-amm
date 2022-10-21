@@ -51,7 +51,7 @@ module cetus_amm::amm_router {
             !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
             error::internal(EINVALID_COIN_PAIR));
 
-        amm_swap::init_pool<CoinTypeA, CoinTypeB> (
+        amm_swap::init_pool_v2<CoinTypeA, CoinTypeB> (
             account,
             protocol_fee_to);
     }
@@ -97,7 +97,7 @@ module cetus_amm::amm_router {
             amount_b_min);
         let coinA = coin::withdraw<CoinTypeA>(account,(amount_a as u64));
         let coinB = coin::withdraw<CoinTypeB>(account,(amount_b as u64));
-        let liquidity_token = amm_swap::mint_and_emit_event<CoinTypeA, CoinTypeB>(
+        let liquidity_token = amm_swap::mint_and_emit_event_v2<CoinTypeA, CoinTypeB>(
                 account,
                 coinA,
                 coinB);
@@ -158,7 +158,7 @@ module cetus_amm::amm_router {
         amount_a_min: u128,
         amount_b_min: u128) {
         let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
-        let (token_a, token_b) = amm_swap::burn_and_emit_event(
+        let (token_a, token_b) = amm_swap::burn_and_emit_event_v2(
             account,
             liquidity_token);
         assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
@@ -190,7 +190,7 @@ module cetus_amm::amm_router {
             //withdraw coin a
             let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
             // swap
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, b_out, coin::zero(), 0);
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_a, b_out, coin::zero(), 0);
         } else {
             //calc b out amount
             let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in, false);
@@ -198,14 +198,14 @@ module cetus_amm::amm_router {
             //withdraw coin a
             let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
             // sawp
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, b_out);
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, b_out);
         };
         //destroy
         coin::destroy_zero(coin_a_out);
         coin::deposit(sender, coin_b_out);
         coin::destroy_zero(coin_b_fee);
         //swap protocol fee
-        amm_swap::handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
+        amm_swap::handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(sender, coin_a_fee, is_forward);
     }
 
     public fun swap_exact_coin_for_coin_router2<CoinTypeA, CoinTypeX, CoinTypeB>(
@@ -272,14 +272,14 @@ module cetus_amm::amm_router {
 
             let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
 
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event<CoinTypeA, CoinTypeB>(account, coin_a, amount_b_out, coin::zero(), 0);
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_a, amount_b_out, coin::zero(), 0);
         } else {
             let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out, false);
             assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
 
             let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
             
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_b_out);
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_b_out);
         };
 
         coin::destroy_zero(coin_a_out);
