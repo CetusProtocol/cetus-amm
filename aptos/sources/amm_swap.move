@@ -30,6 +30,7 @@ module cetus_amm::amm_swap {
     const EPOOL_ALREADY_EXISTS: u64 = 4008;
     const ELIQUIDITY_CALC_INVALID: u64 = 4009;
     const EFUNCTION_DEPRECATED: u64 = 4010;
+    const OBSOLETE_METHOD: u64 = 4011;
 
     const EQUAL: u8 = 0;
     const LESS_THAN: u8 = 1;
@@ -298,7 +299,7 @@ module cetus_amm::amm_swap {
         assert_deprecated_function(true);
         let coin_a_in_value = (coin::value<CoinTypeA>(&coin_a_in) as u128);
         let coin_b_in_value = (coin::value<CoinTypeB>(&coin_b_in) as u128);
-        let (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap<CoinTypeA, CoinTypeB>(coin_a_in, coin_b_out, coin_b_in, coin_a_out);
+        let (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap_v2<CoinTypeA, CoinTypeB>(coin_a_in, coin_b_out, coin_b_in, coin_a_out);
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event<SwapEvent>(
             &mut event_handle.swap_events,
@@ -309,10 +310,16 @@ module cetus_amm::amm_swap {
                 a_in: coin_a_in_value,
                 a_out: (coin::value<CoinTypeA>(&coin_a_out) as u128),
                 b_in: coin_b_in_value,
-                b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128) 
+                b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128)
             }
         );
-        (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee)
+        if (coin_a_in_value == 0){
+            handle_swap_protocol_fee_v2<CoinTypeB,CoinTypeA>(signer::address_of(account),coin_b_fee,false);
+            (coin_a_out, coin_b_out, coin::zero<CoinTypeA>(), coin::zero<CoinTypeB>())
+        } else {
+            handle_swap_protocol_fee_v2<CoinTypeA,CoinTypeB>(signer::address_of(account),coin_a_fee,true);
+            (coin_a_out, coin_b_out, coin::zero<CoinTypeA>(), coin::zero<CoinTypeB>())
+        }
     }
 
     public(friend) fun swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(
@@ -338,59 +345,19 @@ module cetus_amm::amm_swap {
                 b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128) 
             }
         );
+
         (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee)
     }
 
     public fun swap<CoinTypeA, CoinTypeB>(
-        coin_a_in: Coin<CoinTypeA>,
-        coin_b_out: u128,
-        coin_b_in: Coin<CoinTypeB>,
-        coin_a_out: u128, 
-    ): (Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool{
-        assert_deprecated_function(true);
-        amm_config::assert_pause();
-
-        let a_in_value = coin::value(&coin_a_in);
-        let b_in_value = coin::value(&coin_b_in);
-        assert!(
-            a_in_value > 0 || b_in_value > 0,  
-            error::internal(ECOIN_INSUFFICIENT));
-
-        let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>();
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        coin::merge(&mut pool.coin_a, coin_a_in);
-        coin::merge(&mut pool.coin_b, coin_b_in);
-
-        let coin_a_swapped = coin::extract(&mut pool.coin_a, (coin_a_out as u64));
-        let coin_b_swapped = coin::extract(&mut pool.coin_b, (coin_b_out as u64));
-        {
-            let a_reserve_new = coin::value(&pool.coin_a);
-            let b_reserve_new = coin::value(&pool.coin_b);
-            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
-            
-            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
-                a_reserve_new, 
-                b_reserve_new, 
-                a_in_value, 
-                b_in_value, 
-                fee_numerator, 
-                fee_denominator);
-
-            
-            assert_lp_value_incr(
-                a_reserve,
-                b_reserve,
-                a_adjusted,
-                b_adjusted,
-                (fee_denominator as u128)
-            );
-        };
-
-        let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>();
-        let a_swap_fee = coin::extract(&mut pool.coin_a, (amm_math::safe_mul_div_u128((a_in_value as u128), protocol_fee_numberator, protocol_fee_denominator) as u64));
-        let b_swap_fee = coin::extract(&mut pool.coin_b, (amm_math::safe_mul_div_u128((b_in_value as u128), protocol_fee_numberator, protocol_fee_denominator) as u64));
-
-        (coin_a_swapped, coin_b_swapped, a_swap_fee, b_swap_fee)
+        _coin_a_in: Coin<CoinTypeA>,
+        _coin_b_out: u128,
+        _coin_b_in: Coin<CoinTypeB>,
+        _coin_a_out: u128,
+    ): (Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>){
+        // coin::destroy_zero(_coin_a_in);
+        // coin::destroy_zero(_coin_b_in);
+        abort OBSOLETE_METHOD
     }
 
     fun swap_v2<CoinTypeA, CoinTypeB>(
