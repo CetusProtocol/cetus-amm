@@ -4,7 +4,7 @@ module cetus_amm::amm_router {
     use cetus_amm::amm_config;
     use cetus_amm::amm_swap::{PoolLiquidityCoin,Self};
     use cetus_amm::amm_utils;
-    use aptos_framework::coin;
+    use aptos_framework::coin::{Self, Coin};
     use aptos_std::comparator;
     use cetus_amm::amm_math::{Self, quote};
 
@@ -97,12 +97,12 @@ module cetus_amm::amm_router {
             amount_b_min);
         let coinA = coin::withdraw<CoinTypeA>(account,(amount_a as u64));
         let coinB = coin::withdraw<CoinTypeB>(account,(amount_b as u64));
+        let sender = signer::address_of(account);
         let liquidity_token = amm_swap::mint_and_emit_event_v2<CoinTypeA, CoinTypeB>(
-                account,
+                sender,
                 coinA,
                 coinB);
         assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
-        let sender = signer::address_of(account);
         if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coin::register<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
         coin::deposit(sender,liquidity_token);
     }
@@ -158,12 +158,12 @@ module cetus_amm::amm_router {
         amount_a_min: u128,
         amount_b_min: u128) {
         let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
+        let sender = signer::address_of(account);
         let (token_a, token_b) = amm_swap::burn_and_emit_event_v2(
-            account,
+            sender,
             liquidity_token);
         assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
         assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
-        let sender = signer::address_of(account);
         coin::deposit(sender,token_a);
         coin::deposit(sender,token_b);
     }
@@ -190,7 +190,7 @@ module cetus_amm::amm_router {
             //withdraw coin a
             let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
             // swap
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_a, b_out, coin::zero(), 0);
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(sender, coin_a, b_out, coin::zero(), 0);
         } else {
             //calc b out amount
             let b_out = compute_b_out<CoinTypeA, CoinTypeB>(amount_a_in, false);
@@ -198,7 +198,7 @@ module cetus_amm::amm_router {
             //withdraw coin a
             let coin_a = coin::withdraw<CoinTypeA>(account, (amount_a_in as u64));
             // sawp
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, b_out);
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(sender, coin::zero(), 0, coin_a, b_out);
         };
         //destroy
         coin::destroy_zero(coin_a_out);
@@ -272,14 +272,14 @@ module cetus_amm::amm_router {
 
             let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
 
-            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_a, amount_b_out, coin::zero(), 0);
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(sender, coin_a, amount_b_out, coin::zero(), 0);
         } else {
             let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_b_out, false);
             assert!(a_in <= amount_a_in_max, error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
 
             let coin_a = coin::withdraw<CoinTypeA>(account, (a_in as u64));
             
-            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_b_out);
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(sender, coin::zero(), 0, coin_a, amount_b_out);
         };
 
         coin::destroy_zero(coin_a_out);
@@ -385,5 +385,34 @@ module cetus_amm::amm_router {
         let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeX>();
         let a_in = compute_a_in<CoinTypeA, CoinTypeX>(x_in, is_forward);
         (y_in, x_in, a_in)
+    }
+
+    public fun swap<CoinTypeA, CoinTypeB>(account: address, coin_in: Coin<CoinTypeA>): Coin<CoinTypeB> {
+         assert!(
+            !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
+            error::invalid_argument(EINVALID_COIN_PAIR));
+        
+        let coin_in_value = coin::value(&coin_in);
+
+        let (coin_a_out, coin_b_out);
+        let (coin_a_fee, coin_b_fee);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>();
+        if (is_forward) {
+            //calc b out amount
+            let b_out = compute_b_out<CoinTypeA, CoinTypeB>((coin_in_value as u128), true);
+            // swap
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_in, b_out, coin::zero(), 0);
+        } else {
+            //calc b out amount
+            let b_out = compute_b_out<CoinTypeA, CoinTypeB>((coin_in_value as u128), false);
+            // sawp
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_in, b_out);
+        };
+        //destroy
+        coin::destroy_zero(coin_a_out);
+        coin::destroy_zero(coin_b_fee);
+        //swap protocol fee
+        amm_swap::handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(account, coin_a_fee, is_forward);
+        coin_b_out
     }
 }

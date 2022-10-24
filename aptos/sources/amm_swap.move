@@ -101,35 +101,8 @@ module cetus_amm::amm_swap {
         swap_fee_events: EventHandle<SwapFeeEvent>,
     }
 
-    public fun init_pool<CoinTypeA, CoinTypeB>(account: &signer, protocol_fee_to: address) acquires PoolSwapEventHandle {
-        assert_deprecated_function(true);
-        //check coin type
-        amm_utils::assert_is_coin<CoinTypeA>();
-        amm_utils::assert_is_coin<CoinTypeB>();
-
-        assert!(!exists<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()), EPOOL_ALREADY_EXISTS);
-        assert!(!exists<Pool<CoinTypeB, CoinTypeA>>(amm_config::admin_address()), EPOOL_ALREADY_EXISTS);
-
-        //check admin
-        assert_admin(account);
-
-        //check protocol_fee_to existed
-        assert!(
-             account::exists_at(protocol_fee_to),
-             error::not_found(EACCOUNT_NOT_EXISTED));
-
-         //reigister lp coin
-        let(burn_capability, mint_capability) = register_liquidity_coin<CoinTypeA, CoinTypeB>(account);
-        
-        //make pool
-        let pool = make_pool<CoinTypeA, CoinTypeB>(protocol_fee_to, burn_capability, mint_capability);
-        move_to(account, pool);
-
-        //init event handle
-        init_event_handle(account);
-
-        //emit init pool event
-        emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
+    public fun init_pool<CoinTypeA, CoinTypeB>(_account: &signer, _protocol_fee_to: address){   
+        abort EFUNCTION_DEPRECATED
     }
 
     public(friend) fun init_pool_v2<CoinTypeA, CoinTypeB>(account: &signer, protocol_fee_to: address) acquires PoolSwapEventHandle {
@@ -159,31 +132,18 @@ module cetus_amm::amm_swap {
         init_event_handle(account);
 
         //emit init pool event
-        emit_init_pool_event<CoinTypeA, CoinTypeB>(account, protocol_fee_to);
+        emit_init_pool_event<CoinTypeA, CoinTypeB>(signer::address_of(account), protocol_fee_to);
     }
 
     public fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        coinA: Coin<CoinTypeA>, 
-        coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
-        assert_deprecated_function(true);
-        let amount_a = (coin::value(&coinA) as u128);
-        let amount_b = (coin::value(&coinB) as u128);
-        let liquidity_token = mint<CoinTypeA, CoinTypeB>(coinA,coinB);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
-        event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
-            liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
-            account: signer::address_of(account),
-            coin_a_info:type_info::type_of<CoinTypeA>(),
-            coin_b_info:type_info::type_of<CoinTypeB>(),
-            amount_a,
-            amount_b
-        });
-        liquidity_token
+        _account: &signer,
+        _coinA: Coin<CoinTypeA>, 
+        _coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>{
+        abort EFUNCTION_DEPRECATED
     }
 
     public(friend) fun mint_and_emit_event_v2<CoinTypeA, CoinTypeB>(
-        account: &signer,
+        account: address,
         coinA: Coin<CoinTypeA>, 
         coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
         let amount_a = (coin::value(&coinA) as u128);
@@ -192,7 +152,7 @@ module cetus_amm::amm_swap {
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
             liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
-            account: signer::address_of(account),
+            account: account,
             coin_a_info:type_info::type_of<CoinTypeA>(),
             coin_b_info:type_info::type_of<CoinTypeB>(),
             amount_a,
@@ -235,27 +195,13 @@ module cetus_amm::amm_swap {
     }
 
     public fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
-        assert_deprecated_function(true);
-        let liquidity = (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&to_burn) as u128);
-        let (a_token, b_token) = burn<CoinTypeA, CoinTypeB>(to_burn);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
-        let amount_a = (coin::value<CoinTypeA>(&a_token) as u128);
-        let amount_b = (coin::value<CoinTypeB>(&b_token) as u128);
-        event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
-            liquidity,
-            account: signer::address_of(account),
-            coin_a_info:type_info::type_of<CoinTypeA>(),
-            coin_b_info:type_info::type_of<CoinTypeB>(),
-            amount_a,
-            amount_b,
-        });
-        (a_token, b_token)
+        _account: &signer,
+        _to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>) : (Coin<CoinTypeA>, Coin<CoinTypeB>) {
+        abort EFUNCTION_DEPRECATED
     }
 
     public(friend) fun burn_and_emit_event_v2<CoinTypeA, CoinTypeB>(
-        account: &signer,
+        account: address,
         to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>) : (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
         let liquidity = (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&to_burn) as u128);
         let (a_token, b_token) = burn<CoinTypeA, CoinTypeB>(to_burn);
@@ -264,7 +210,7 @@ module cetus_amm::amm_swap {
         let amount_b = (coin::value<CoinTypeB>(&b_token) as u128);
         event::emit_event(&mut event_handle.remove_liquidity_events, RemoveLiquidityEvent {
             liquidity,
-            account: signer::address_of(account),
+            account: account,
             coin_a_info:type_info::type_of<CoinTypeA>(),
             coin_b_info:type_info::type_of<CoinTypeB>(),
             amount_a,
@@ -289,34 +235,17 @@ module cetus_amm::amm_swap {
     }
 
     public fun swap_and_emit_event<CoinTypeA, CoinTypeB>(
-        account: &signer,
-        coin_a_in: Coin<CoinTypeA>,
-        coin_b_out: u128,
-        coin_b_in: Coin<CoinTypeB>,
-        coin_a_out: u128
-    ) :(Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool, PoolSwapEventHandle {
-        assert_deprecated_function(true);
-        let coin_a_in_value = (coin::value<CoinTypeA>(&coin_a_in) as u128);
-        let coin_b_in_value = (coin::value<CoinTypeB>(&coin_b_in) as u128);
-        let (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = swap<CoinTypeA, CoinTypeB>(coin_a_in, coin_b_out, coin_b_in, coin_a_out);
-        let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
-        event::emit_event<SwapEvent>(
-            &mut event_handle.swap_events,
-            SwapEvent {
-                coin_a_info: type_info::type_of<CoinTypeA>(),
-                coin_b_info: type_info::type_of<CoinTypeB>(),
-                account: signer::address_of(account),
-                a_in: coin_a_in_value,
-                a_out: (coin::value<CoinTypeA>(&coin_a_out) as u128),
-                b_in: coin_b_in_value,
-                b_out: (coin::value<CoinTypeB>(&coin_b_out) as u128) 
-            }
-        );
-        (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee)
+        _account: &signer,
+        _coin_a_in: Coin<CoinTypeA>,
+        _coin_b_out: u128,
+        _coin_b_in: Coin<CoinTypeB>,
+        _coin_a_out: u128
+    ) :(Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) {
+        abort EFUNCTION_DEPRECATED
     }
 
     public(friend) fun swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(
-        account: &signer,
+        account: address,
         coin_a_in: Coin<CoinTypeA>,
         coin_b_out: u128,
         coin_b_in: Coin<CoinTypeB>,
@@ -331,7 +260,7 @@ module cetus_amm::amm_swap {
             SwapEvent {
                 coin_a_info: type_info::type_of<CoinTypeA>(),
                 coin_b_info: type_info::type_of<CoinTypeB>(),
-                account: signer::address_of(account),
+                account: account,
                 a_in: coin_a_in_value,
                 a_out: (coin::value<CoinTypeA>(&coin_a_out) as u128),
                 b_in: coin_b_in_value,
@@ -342,55 +271,12 @@ module cetus_amm::amm_swap {
     }
 
     public fun swap<CoinTypeA, CoinTypeB>(
-        coin_a_in: Coin<CoinTypeA>,
-        coin_b_out: u128,
-        coin_b_in: Coin<CoinTypeB>,
-        coin_a_out: u128, 
-    ): (Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool{
-        assert_deprecated_function(true);
-        amm_config::assert_pause();
-
-        let a_in_value = coin::value(&coin_a_in);
-        let b_in_value = coin::value(&coin_b_in);
-        assert!(
-            a_in_value > 0 || b_in_value > 0,  
-            error::internal(ECOIN_INSUFFICIENT));
-
-        let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>();
-        let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        coin::merge(&mut pool.coin_a, coin_a_in);
-        coin::merge(&mut pool.coin_b, coin_b_in);
-
-        let coin_a_swapped = coin::extract(&mut pool.coin_a, (coin_a_out as u64));
-        let coin_b_swapped = coin::extract(&mut pool.coin_b, (coin_b_out as u64));
-        {
-            let a_reserve_new = coin::value(&pool.coin_a);
-            let b_reserve_new = coin::value(&pool.coin_b);
-            let (fee_numerator, fee_denominator) = amm_config::get_trade_fee<CoinTypeA, CoinTypeB>();
-            
-            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
-                a_reserve_new, 
-                b_reserve_new, 
-                a_in_value, 
-                b_in_value, 
-                fee_numerator, 
-                fee_denominator);
-
-            
-            assert_lp_value_incr(
-                a_reserve,
-                b_reserve,
-                a_adjusted,
-                b_adjusted,
-                (fee_denominator as u128)
-            );
-        };
-
-        let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate<CoinTypeA, CoinTypeB>();
-        let a_swap_fee = coin::extract(&mut pool.coin_a, (amm_math::safe_mul_div_u128((a_in_value as u128), protocol_fee_numberator, protocol_fee_denominator) as u64));
-        let b_swap_fee = coin::extract(&mut pool.coin_b, (amm_math::safe_mul_div_u128((b_in_value as u128), protocol_fee_numberator, protocol_fee_denominator) as u64));
-
-        (coin_a_swapped, coin_b_swapped, a_swap_fee, b_swap_fee)
+        _coin_a_in: Coin<CoinTypeA>,
+        _coin_b_out: u128,
+        _coin_b_in: Coin<CoinTypeB>,
+        _coin_a_out: u128, 
+    ): (Coin<CoinTypeA>, Coin<CoinTypeB>, Coin<CoinTypeA>, Coin<CoinTypeB>) {
+        abort EFUNCTION_DEPRECATED
     }
 
     fun swap_v2<CoinTypeA, CoinTypeB>(
@@ -492,7 +378,7 @@ module cetus_amm::amm_swap {
     }
 
     fun emit_init_pool_event<CoinTypeA, CoinTypeB>(
-        account: &signer,
+        account: address,
         protocol_fee_to: address
     ) acquires PoolSwapEventHandle {
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
@@ -501,7 +387,7 @@ module cetus_amm::amm_swap {
             InitPoolEvent {
                 coin_a_info: type_info::type_of<CoinTypeA>(),
                 coin_b_info: type_info::type_of<CoinTypeB>(),
-                account: signer::address_of(account),
+                account: account,
                 protocol_fee_to: protocol_fee_to,
             }
         );
@@ -520,16 +406,11 @@ module cetus_amm::amm_swap {
          ((fee_numerator * protocol_fee_numberator as u128), (fee_denominator * protocol_fee_denominator as u128))
     }
 
-    public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>, is_forward: bool) acquires PoolSwapEventHandle, Pool {
-        assert_deprecated_function(true);
-        let protocol_fee_to: address;
-        if(is_forward) {
-             protocol_fee_to = borrow_global<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address()).protocol_fee_to;
-        } else {
-             protocol_fee_to = borrow_global<Pool<CoinTypeB, CoinTypeA>>(amm_config::admin_address()).protocol_fee_to;
-        };
-
-        handle_swap_protocol_fee_internal<CoinTypeA, CoinTypeB>(signer_address, protocol_fee_to, token_a, is_forward);
+    public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(
+        _signer_address: address, 
+        _token_a: Coin<CoinTypeA>, 
+        _is_forward: bool) {
+        abort EFUNCTION_DEPRECATED
     }
 
     public(friend) fun handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(signer_address: address, token_a: Coin<CoinTypeA>, is_forward: bool) acquires PoolSwapEventHandle, Pool {
@@ -640,11 +521,4 @@ module cetus_amm::amm_swap {
             (EQUAL == cmp_order || GREATER_THAN == cmp_order), 
             error::internal(ESWAPOUT_CALC_INVALID));
     }
-
-    fun assert_deprecated_function(
-        is_deprecated: bool
-    ) {
-        assert!(!is_deprecated, EFUNCTION_DEPRECATED);
-    }
-    
 }
