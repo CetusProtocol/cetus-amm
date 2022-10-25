@@ -33,8 +33,8 @@ module cetus_amm::amm_math {
     public fun quote(amount_a: u128, reserve_a: u128, reserve_b: u128): u128 {
         assert!(amount_a > 0, error::invalid_argument(EPARAMETER_INVALID));
         assert!(reserve_a > 0 && reserve_b> 0, error::invalid_argument(EPARAMETER_INVALID));
-        let amount_y = safe_mul_div_u128(amount_a,reserve_b,reserve_a);
-        amount_y
+        let amount_b = safe_mul_div_u128(amount_a,reserve_b,reserve_a);
+        amount_b
     }
 
     public fun sqrt(y: u128): u128 {

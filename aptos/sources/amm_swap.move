@@ -148,23 +148,24 @@ module cetus_amm::amm_swap {
         coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool, PoolSwapEventHandle {
         let amount_a = (coin::value(&coinA) as u128);
         let amount_b = (coin::value(&coinB) as u128);
-        let liquidity_token = mint<CoinTypeA, CoinTypeB>(coinA,coinB);
+        let liquidity_coin = mint<CoinTypeA, CoinTypeB>(coinA,coinB);
         let event_handle = borrow_global_mut<PoolSwapEventHandle>(amm_config::admin_address());
         event::emit_event(&mut event_handle.add_liquidity_events,AddLiquidityEvent{
-            liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_token) as u128),
+            liquidity: (coin::value<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(&liquidity_coin) as u128),
             account: account,
             coin_a_info:type_info::type_of<CoinTypeA>(),
             coin_b_info:type_info::type_of<CoinTypeB>(),
             amount_a,
             amount_b
         });
-        liquidity_token
+        liquidity_coin
     }
 
     fun mint<CoinTypeA, CoinTypeB>(
         coinA: Coin<CoinTypeA>, 
         coinB: Coin<CoinTypeB>): Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>> acquires Pool {
-
+        amm_config::assert_pause();
+        
         let (reserve_a, reserve_b) = get_reserves<CoinTypeA, CoinTypeB>();
 
         let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
@@ -220,13 +221,15 @@ module cetus_amm::amm_swap {
     }
 
     fun burn<CoinTypeA, CoinTypeB>(to_burn: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>): (Coin<CoinTypeA>, Coin<CoinTypeB>) acquires Pool {
+        amm_config::assert_pause();
+
         let to_burn_value = (coin::value(&to_burn) as u128);
         let pool = borrow_global_mut<Pool<CoinTypeA, CoinTypeB>>(amm_config::admin_address());
-        let reserveA = (coin::value(&pool.coin_a) as u128);
-        let reserveB = (coin::value(&pool.coin_b) as u128);
+        let reserve_a = (coin::value(&pool.coin_a) as u128);
+        let reserve_b = (coin::value(&pool.coin_b) as u128);
         let total_supply = *option::borrow(&coin::supply<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>());
-        let amount0 = (amm_math::safe_mul_div_u128(to_burn_value,reserveA,total_supply) as u64);
-        let amount1 = (amm_math::safe_mul_div_u128(to_burn_value,reserveB,total_supply) as u64); 
+        let amount0 = (amm_math::safe_mul_div_u128(to_burn_value,reserve_a,total_supply) as u64);
+        let amount1 = (amm_math::safe_mul_div_u128(to_burn_value,reserve_b,total_supply) as u64); 
         assert!(amount0 > 0 && amount1 > 0, error::internal(ELIQUIDITY_SWAP_BURN_CALC_INVALID)); 
 
         coin::burn(to_burn, &pool.burn_capability);

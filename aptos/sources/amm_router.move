@@ -63,8 +63,6 @@ module cetus_amm::amm_router {
         amount_b_desired: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        amm_config::assert_pause();
-
         if (amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>()) {
             add_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
@@ -98,13 +96,13 @@ module cetus_amm::amm_router {
         let coinA = coin::withdraw<CoinTypeA>(account,(amount_a as u64));
         let coinB = coin::withdraw<CoinTypeB>(account,(amount_b as u64));
         let sender = signer::address_of(account);
-        let liquidity_token = amm_swap::mint_and_emit_event_v2<CoinTypeA, CoinTypeB>(
+        let liquidity_coin = amm_swap::mint_and_emit_event_v2<CoinTypeA, CoinTypeB>(
                 sender,
                 coinA,
                 coinB);
-        assert!(coin::value(&liquidity_token) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
+        assert!(coin::value(&liquidity_coin) > 0, error::invalid_argument(ELIQUIDITY_ADD_LIQUIDITY_FAILED));
         if (!coin::is_account_registered<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(sender)) coin::register<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account);
-        coin::deposit(sender,liquidity_token);
+        coin::deposit(sender,liquidity_coin);
     }
 
     fun calculate_amount_for_liquidity_internal<CoinTypeA, CoinTypeB>(
@@ -135,8 +133,6 @@ module cetus_amm::amm_router {
         liquidity: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        amm_config::assert_pause();
-
         if (amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>()) {
             remove_liquidity_internal<CoinTypeA, CoinTypeB>(
                 account,
@@ -157,15 +153,15 @@ module cetus_amm::amm_router {
         liquidity: u128,
         amount_a_min: u128,
         amount_b_min: u128) {
-        let liquidity_token = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
+        let liquidity_coin = coin::withdraw<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>(account,(liquidity as u64));
         let sender = signer::address_of(account);
-        let (token_a, token_b) = amm_swap::burn_and_emit_event_v2(
+        let (coin_a, coin_b) = amm_swap::burn_and_emit_event_v2(
             sender,
-            liquidity_token);
-        assert!((coin::value(&token_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
-        assert!((coin::value(&token_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
-        coin::deposit(sender,token_a);
-        coin::deposit(sender,token_b);
+            liquidity_coin);
+        assert!((coin::value(&coin_a) as u128) >= amount_a_min, error::internal(ELIQUIDITY_INSUFFICIENT_A_AMOUNT));
+        assert!((coin::value(&coin_b) as u128) >= amount_b_min, error::internal(ELIQUIDITY_INSUFFICIENT_B_AMOUNT));
+        coin::deposit(sender,coin_a);
+        coin::deposit(sender,coin_b);
     }
 
     public fun swap_exact_coin_for_coin<CoinTypeA, CoinTypeB>(
