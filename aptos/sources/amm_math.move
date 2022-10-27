@@ -8,6 +8,7 @@ module cetus_amm::amm_math {
     const EDIVIDE_BY_ZERO: u64 = 2001;
     const EPARAMETER_INVALID: u64 = 2001;
     const U128_MAX:u128 = 340282366920938463463374607431768211455;
+    const U64_MAX: u128 = 18446744073709551615;
 
     public fun safe_compare_mul_u128(a1: u128, b1: u128, a2: u128, b2: u128): u8 {
         let left = u256::mul(u256::from_u128(a1), u256::from_u128(b1));
@@ -16,7 +17,10 @@ module cetus_amm::amm_math {
     }
 
     public fun safe_mul_div_u128(x: u128, y: u128, z: u128): u128 {
-        u256::as_u128(mul_div_u128(x, y, z))
+        assert!(z != 0, EDIVIDE_BY_ZERO);
+        assert!(x <= U64_MAX, EPARAMETER_INVALID);
+        assert!(y <= U64_MAX, EPARAMETER_INVALID);
+        x * y / z
     }
 
     public fun mul_div_u128(x: u128, y: u128, z: u128): U256 {
