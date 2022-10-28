@@ -7,10 +7,10 @@ module cetus_amm::amm_config {
     const ENOT_HAS_PRIVILEGE: u64 = 1001;
     const EPOOL_PAUSE: u64 = 1002;
 
-    const DEFAULT_TRADE_FEE_NUMERATOR: u64 = 10000;
-    const DEFAULT_TRADE_FEE_DENOMINATOR: u64 = 1;
-    const DEFAULT_PROTOCOL_FEE_NUMERATOR: u64 = 10000;
-    const DEFAULT_PROTOCOL_FEE_DENOMINATOR: u64 = 5;
+    const DEFAULT_TRADE_FEE_NUMERATOR: u64 = 2;
+    const DEFAULT_TRADE_FEE_DENOMINATOR: u64 = 1000;
+    const DEFAULT_PROTOCOL_FEE_NUMERATOR: u64 = 2;
+    const DEFAULT_PROTOCOL_FEE_DENOMINATOR: u64 = 10;
 
     struct PoolFeeConfig<phantom CoinTypeA, phantom CoinTypeB> has key {
         trade_fee_numerator: u64,
