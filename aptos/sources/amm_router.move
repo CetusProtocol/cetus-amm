@@ -411,4 +411,37 @@ module cetus_amm::amm_router {
         amm_swap::handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(account, coin_a_fee, is_forward);
         coin_b_out
     }
+
+    public fun swap_into<CoinTypeA, CoinTypeB>(account: address, coin_in: &mut Coin<CoinTypeA>, amount_out: u128): Coin<CoinTypeB> {
+        assert!(
+            !comparator::is_equal(&amm_utils::compare_coin<CoinTypeA, CoinTypeB>()),  
+            error::invalid_argument(EINVALID_COIN_PAIR));
+
+        let amount_in_max = coin::value(coin_in);
+
+        let (coin_a_out, coin_b_out);
+        let (coin_a_fee, coin_b_fee);
+        let is_forward = amm_swap::get_pool_direction<CoinTypeA, CoinTypeB>();
+        if(is_forward) {
+            let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_out, true);
+            assert!(a_in <= (amount_in_max as u128), error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
+
+            let coin_a = coin::extract<CoinTypeA>(coin_in, (a_in as u64));
+
+            (coin_a_out, coin_b_out, coin_a_fee, coin_b_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeA, CoinTypeB>(account, coin_a, amount_out, coin::zero(), 0);
+        } else {
+            let a_in = compute_a_in<CoinTypeA, CoinTypeB>(amount_out, false);
+            assert!(a_in <= (amount_in_max as u128), error::internal(ESWAP_A_IN_OVER_LIMIT_MAX));
+
+            let coin_a = coin::extract<CoinTypeA>(coin_in, (a_in as u64));
+            
+            (coin_b_out, coin_a_out, coin_b_fee, coin_a_fee) = amm_swap::swap_and_emit_event_v2<CoinTypeB, CoinTypeA>(account, coin::zero(), 0, coin_a, amount_out);
+        };
+
+        coin::destroy_zero(coin_a_out);
+        coin::destroy_zero(coin_b_fee);
+
+        amm_swap::handle_swap_protocol_fee_v2<CoinTypeA, CoinTypeB>(account, coin_a_fee, is_forward);
+        coin_b_out
+    }
 }
