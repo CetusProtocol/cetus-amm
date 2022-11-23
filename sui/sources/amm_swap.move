@@ -1,4 +1,5 @@
 module cetus_amm::amm_swap {
+    friend cetus_amm::amm_route;
     use sui::object::{Self, UID, ID};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Supply, Balance};
@@ -8,6 +9,7 @@ module cetus_amm::amm_swap {
     use sui::tx_context::{Self, TxContext};
     use cetus_amm::amm_config::{new_global_pause_status_and_shared};
     use cetus_amm::amm_math;
+    use cetus_amm::amm_utils;
 
     const MINIMUM_LIQUIDITY: u64 = 10;
 
@@ -102,7 +104,7 @@ module cetus_amm::amm_swap {
         });
     }
 
-    public fun init_pool<CoinTypeA, CoinTypeB>(
+    public(friend) fun init_pool<CoinTypeA, CoinTypeB>(
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
         protocol_fee_numerator: u64,
@@ -165,7 +167,7 @@ module cetus_amm::amm_swap {
         (balance::value(&pool.coin_a), balance::value(&pool.coin_b))
     }
 
-    public fun swap_and_emit_event<CoinTypeA, CoinTypeB>(
+    public(friend) fun swap_and_emit_event<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         balance_a_in: Balance<CoinTypeA>,
         b_out: u64,
@@ -202,10 +204,10 @@ module cetus_amm::amm_swap {
             ECoinInsufficient
         );
 
-
+        let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>(pool);
         balance::join(&mut pool.coin_a, balance_a_in);
         balance::join(&mut pool.coin_b, balance_b_in);
-        let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>(pool);
+
 
         let balance_a_swapped = balance::split(&mut pool.coin_a, a_out);
         let balance_b_swapped = balance::split(&mut pool.coin_b, b_out);
@@ -215,12 +217,22 @@ module cetus_amm::amm_swap {
             let b_reserve_new = balance::value(&pool.coin_b);
             let (fee_numerator, fee_denominator) = get_trade_fee<CoinTypeA, CoinTypeB>(pool);
             
-            let a_adjusted = a_reserve_new * fee_denominator - balance_a_in_value * fee_numerator;
-            let b_adjusted = b_reserve_new * fee_denominator - balance_b_in_value * fee_numerator;
+            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
+                a_reserve_new, 
+                b_reserve_new, 
+                balance_a_in_value, 
+                balance_b_in_value, 
+                fee_numerator, 
+                fee_denominator);
 
-            assert!(
-                amm_math::safe_compare_mul_u64(a_adjusted, b_adjusted, a_reserve, b_reserve), 
-                ESwapoutCalcInvalid);
+            
+            assert_lp_value_incr(
+                a_reserve,
+                b_reserve,
+                a_adjusted,
+                b_adjusted,
+                fee_denominator
+            );
         };
 
         let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate(pool);
@@ -235,12 +247,12 @@ module cetus_amm::amm_swap {
         (amm_math::safe_mul_u64(fee_numerator, protocol_fee_numerator), amm_math::safe_mul_u64(fee_denominator, protocol_fee_denominator))
     }
 
-    public fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(pool: &mut Pool<CoinTypeA, CoinTypeB>, fee_a: Balance<CoinTypeA>, fee_b: Balance<CoinTypeB>) {
+    public(friend) fun handle_swap_protocol_fee<CoinTypeA, CoinTypeB>(pool: &mut Pool<CoinTypeA, CoinTypeB>, fee_a: Balance<CoinTypeA>, fee_b: Balance<CoinTypeB>) {
         balance::join(&mut pool.coin_a_admin, fee_a);
         balance::join(&mut pool.coin_b_admin, fee_b);
     }
 
-    public fun set_fee_and_emit_event<CoinTypeA, CoinTypeB>(
+    public(friend) fun set_fee_and_emit_event<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
@@ -263,7 +275,7 @@ module cetus_amm::amm_swap {
         });
     }
 
-    public fun claim_fee<CoinTypeA, CoinTypeB>(
+    public(friend) fun claim_fee<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         ctx: &mut TxContext
     ) {
@@ -278,8 +290,8 @@ module cetus_amm::amm_swap {
         let balance_a_fee = balance::split(&mut pool.coin_a_admin, a_fee_value);
         let balance_b_fee = balance::split(&mut pool.coin_b_admin, b_fee_value);
 
-        coin::keep(coin::from_balance(balance_a_fee, ctx), ctx);
-        coin::keep(coin::from_balance(balance_b_fee, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_a_fee, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_b_fee, ctx), ctx);
 
         event::emit(ClaimFeeEvent{
             sender: tx_context::sender(ctx),
@@ -289,7 +301,7 @@ module cetus_amm::amm_swap {
         });
     }
 
-    public fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
+    public(friend) fun mint_and_emit_event<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         balance_a: Balance<CoinTypeA>,
         balance_b: Balance<CoinTypeB>,
@@ -344,7 +356,7 @@ module cetus_amm::amm_swap {
             ), ctx)
     }
 
-    public fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
+    public(friend) fun burn_and_emit_event<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         to_burn: Balance<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
         ctx:  &mut TxContext
@@ -383,6 +395,31 @@ module cetus_amm::amm_swap {
         let coin_a = coin::from_balance(balance::split(&mut pool.coin_a, amount_a), ctx);
         let coin_b = coin::from_balance(balance::split(&mut pool.coin_b, amount_b), ctx);
         (coin_a, coin_b)
+    }
+
+    fun new_reserves_adjusted(
+        a_reserve: u64,
+        b_reserve: u64,
+        a_in_val: u64,
+        b_in_val: u64,
+        fee_numerator: u64,
+        fee_denominator: u64
+    ) : (u64, u64) {
+        let a_adjusted = a_reserve * fee_denominator - a_in_val * fee_numerator;
+        let b_adjusted = b_reserve * fee_denominator - b_in_val * fee_numerator;
+        (a_adjusted, b_adjusted)
+    }
+
+    fun assert_lp_value_incr(
+        a_reserve: u64,
+        b_reserve: u64,
+        a_adjusted: u64,
+        b_adjusted: u64,
+        fee_denominator: u64
+    ) {
+        assert!(
+                amm_math::safe_compare_mul_u64(a_adjusted, b_adjusted, a_reserve * fee_denominator, b_reserve * fee_denominator), 
+                ESwapoutCalcInvalid);
     }
 
 }

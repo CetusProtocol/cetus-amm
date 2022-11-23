@@ -6,7 +6,7 @@ module cetus_amm::amm_script {
     use sui::tx_context::{TxContext};
 
     entry fun init_pool<CoinTypeA, CoinTypeB>(
-        _: &AdminCap,
+        admin_cap: &AdminCap,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
         protocol_fee_numerator: u64,
@@ -14,6 +14,7 @@ module cetus_amm::amm_script {
         ctx: &mut TxContext
     ) {
         amm_route::init_pool<CoinTypeA, CoinTypeB>(
+            admin_cap,
             trade_fee_numerator,
             trade_fee_denominator,
             protocol_fee_numerator,
@@ -138,18 +139,19 @@ module cetus_amm::amm_script {
     }
 
     entry fun set_global_pause_status(
-        _: &AdminCap, 
+        admin_cap: &AdminCap, 
         global_pause_status: &mut GlobalPauseStatus, 
         status: bool,
         ctx: &mut TxContext) {
         amm_route::set_global_pause_status(
+            admin_cap,
             global_pause_status, 
             status,
             ctx);
     }
 
     entry fun set_fee_config<CoinTypeA, CoinTypeB>(
-        _: &AdminCap,
+        admin_cap: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
@@ -158,6 +160,7 @@ module cetus_amm::amm_script {
         ctx: &mut TxContext
     ) {
         amm_route::set_fee_config(
+            admin_cap,
             pool,
             trade_fee_numerator,
             trade_fee_denominator,
@@ -168,11 +171,12 @@ module cetus_amm::amm_script {
     }
 
     entry fun claim_fee<CoinTypeA, CoinTypeB>(
-        _: &AdminCap,
+        admin_cap: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         ctx: &mut TxContext
     ) {
         amm_route::claim_fee(
+            admin_cap,
             pool,
             ctx
         );

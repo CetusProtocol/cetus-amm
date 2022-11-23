@@ -1,5 +1,5 @@
 module cetus_amm::amm_route {
-    use cetus_amm::amm_swap::{Self, Pool,PoolLiquidityCoin};
+    use cetus_amm::amm_swap::{Self, Pool,PoolLiquidityCoin, AdminCap};
     use cetus_amm::amm_config::{Self, GlobalPauseStatus};
     use cetus_amm::amm_utils;
     use sui::coin::{Self,Coin};
@@ -73,7 +73,7 @@ module cetus_amm::amm_route {
             ctx
         );
         assert!(coin::value(&coin_liquidity) > 0, ELiquidityAddLiquidityFailed);
-        coin::keep(coin_liquidity, ctx);
+        amm_utils::keep(coin_liquidity, ctx);
 
         reture_back_or_delete(balance_a, ctx);
         reture_back_or_delete(balance_b, ctx);
@@ -140,12 +140,13 @@ module cetus_amm::amm_route {
 
             assert!(coin::value(&coin_a) >= amount_a_min, ELiquidityInsufficientAAmount);
             assert!(coin::value(&coin_b) >= amount_b_min, ELiquidityInsufficientBAmount);
-            coin::keep(coin_a, ctx);
-            coin::keep(coin_b, ctx);
+            amm_utils::keep(coin_a, ctx);
+            amm_utils::keep(coin_b, ctx);
             reture_back_or_delete(balance_lp, ctx);
         }
 
     public fun init_pool<CoinTypeA, CoinTypeB>(
+        _: &AdminCap,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
         protocol_fee_numerator: u64,
@@ -189,7 +190,7 @@ module cetus_amm::amm_route {
                 ctx);
 
         balance::destroy_zero(balance_a_out);
-        coin::keep(coin::from_balance(balance_b_out, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_b_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
         balance::destroy_zero(balance_b_fee);
 
@@ -222,7 +223,7 @@ module cetus_amm::amm_route {
                 ctx);
 
         balance::destroy_zero(balance_b_out);
-        coin::keep(coin::from_balance(balance_a_out, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_a_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
         balance::destroy_zero(balance_a_fee);
 
@@ -256,7 +257,7 @@ module cetus_amm::amm_route {
                 ctx);
 
         balance::destroy_zero(balance_a_out);
-        coin::keep(coin::from_balance(balance_b_out, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_b_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
         balance::destroy_zero(balance_b_fee);
 
@@ -290,7 +291,7 @@ module cetus_amm::amm_route {
                 ctx);
 
         balance::destroy_zero(balance_b_out);
-        coin::keep(coin::from_balance(balance_a_out, ctx), ctx);
+        amm_utils::keep(coin::from_balance(balance_a_out, ctx), ctx);
         amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
         balance::destroy_zero(balance_a_fee);
 
@@ -298,6 +299,7 @@ module cetus_amm::amm_route {
     }
 
     public fun set_global_pause_status(
+        _: &AdminCap,
         global_pause_status: &mut GlobalPauseStatus, 
         status: bool,
         ctx: &mut TxContext) {
@@ -332,6 +334,7 @@ module cetus_amm::amm_route {
     }
 
     public fun set_fee_config<CoinTypeA, CoinTypeB>(
+        _: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
@@ -353,6 +356,7 @@ module cetus_amm::amm_route {
     }
 
     public fun claim_fee<CoinTypeA, CoinTypeB>(
+        _: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         ctx: &mut TxContext
     ) {

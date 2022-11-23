@@ -1,4 +1,7 @@
 module cetus_amm::amm_config {
+    friend cetus_amm::amm_route;
+    friend cetus_amm::amm_swap;
+
     use sui::object::{Self, UID, ID};
     use sui::tx_context::{Self, TxContext};
     use sui::event;
@@ -16,7 +19,7 @@ module cetus_amm::amm_config {
         status: bool
     }
 
-    public fun new_global_pause_status_and_shared(ctx: &mut TxContext): ID {
+    public(friend) fun new_global_pause_status_and_shared(ctx: &mut TxContext): ID {
         let global_paulse_status = GlobalPauseStatus {
             id: object::new(ctx),
             pause: false
@@ -31,7 +34,7 @@ module cetus_amm::amm_config {
         global_pause_status.pause
     }
 
-    public fun set_status_and_emit_event(global_pause_status: &mut GlobalPauseStatus, status: bool, ctx: &mut TxContext) {
+    public(friend) fun set_status_and_emit_event(global_pause_status: &mut GlobalPauseStatus, status: bool, ctx: &mut TxContext) {
         global_pause_status.pause = status;
 
         event::emit(SetPauseEvent{
