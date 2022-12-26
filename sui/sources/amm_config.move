@@ -1,5 +1,5 @@
 module cetus_amm::amm_config {
-    friend cetus_amm::amm_route;
+    friend cetus_amm::amm_router;
     friend cetus_amm::amm_swap;
 
     use sui::object::{Self, UID, ID};

@@ -1,5 +1,5 @@
 module cetus_amm::amm_swap {
-    friend cetus_amm::amm_route;
+    friend cetus_amm::amm_router;
     use sui::object::{Self, UID, ID};
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Supply, Balance};

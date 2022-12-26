@@ -1,4 +1,4 @@
-module cetus_amm::amm_route {
+module cetus_amm::amm_router {
     use cetus_amm::amm_swap::{Self, Pool,PoolLiquidityCoin, AdminCap};
     use cetus_amm::amm_config::{Self, GlobalPauseStatus};
     use cetus_amm::amm_utils;

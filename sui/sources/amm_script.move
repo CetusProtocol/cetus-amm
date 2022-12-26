@@ -1,11 +1,11 @@
 module cetus_amm::amm_script {
     use cetus_amm::amm_swap::{Pool,PoolLiquidityCoin, AdminCap};
     use cetus_amm::amm_config::{GlobalPauseStatus};
-    use cetus_amm::amm_route;
+    use cetus_amm::amm_router;
     use sui::coin::{Coin};
     use sui::tx_context::{TxContext};
 
-    entry fun init_pool<CoinTypeA, CoinTypeB>(
+    public entry fun init_pool<CoinTypeA, CoinTypeB>(
         admin_cap: &AdminCap,
         trade_fee_numerator: u64,
         trade_fee_denominator: u64,
@@ -13,7 +13,7 @@ module cetus_amm::amm_script {
         protocol_fee_denominator: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::init_pool<CoinTypeA, CoinTypeB>(
+        amm_router::init_pool<CoinTypeA, CoinTypeB>(
             admin_cap,
             trade_fee_numerator,
             trade_fee_denominator,
@@ -23,7 +23,7 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun swap_exact_coinA_for_coinB<CoinTypeA, CoinTypeB>(
+    public entry fun swap_exact_coinA_for_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_a: Coin<CoinTypeA>,
@@ -31,7 +31,7 @@ module cetus_amm::amm_script {
         amount_b_out_min: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::swap_exact_coinA_for_coinB(
+        amm_router::swap_exact_coinA_for_coinB(
             pool,
             pause_status,
             coin_a,
@@ -41,7 +41,7 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun swap_exact_coinB_for_coinA<CoinTypeA, CoinTypeB>(
+    public entry fun swap_exact_coinB_for_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_b: Coin<CoinTypeB>,
@@ -49,7 +49,7 @@ module cetus_amm::amm_script {
         amount_a_out_min: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::swap_exact_coinB_for_coinA(
+        amm_router::swap_exact_coinB_for_coinA(
             pool,
             pause_status,
             coin_b,
@@ -59,7 +59,7 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun swap_coinA_for_exact_coinB<CoinTypeA, CoinTypeB>(
+    public entry fun swap_coinA_for_exact_coinB<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_a: Coin<CoinTypeA>,
@@ -67,7 +67,7 @@ module cetus_amm::amm_script {
         amount_b_out: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::swap_coinA_for_exact_coinB(
+        amm_router::swap_coinA_for_exact_coinB(
             pool,
             pause_status,
             coin_a,
@@ -77,7 +77,7 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun swap_coinB_for_exact_coinA<CoinTypeA, CoinTypeB>(
+    public entry fun swap_coinB_for_exact_coinA<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_b: Coin<CoinTypeB>,
@@ -85,7 +85,7 @@ module cetus_amm::amm_script {
         amount_a_out: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::swap_coinB_for_exact_coinA(
+        amm_router::swap_coinB_for_exact_coinA(
             pool,
             pause_status,
             coin_b,
@@ -95,7 +95,7 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun add_liquidity<CoinTypeA, CoinTypeB>(
+    public entry fun add_liquidity<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_a: Coin<CoinTypeA>,
@@ -106,7 +106,7 @@ module cetus_amm::amm_script {
         amount_b_min: u64,
         ctx: &mut TxContext   
     ) {
-        amm_route::add_liquidity(
+        amm_router::add_liquidity(
             pool,
             pause_status,
             coin_a,
@@ -118,7 +118,7 @@ module cetus_amm::amm_script {
             ctx);
     }
 
-    entry fun remove_liquidity<CoinTypeA, CoinTypeB>(
+    public entry fun remove_liquidity<CoinTypeA, CoinTypeB>(
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_lp: Coin<PoolLiquidityCoin<CoinTypeA, CoinTypeB>>,
@@ -127,7 +127,7 @@ module cetus_amm::amm_script {
         amount_b_min: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::remove_liquidity(
+        amm_router::remove_liquidity(
             pool,
             pause_status,
             coin_lp,
@@ -138,19 +138,19 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun set_global_pause_status(
+    public entry fun set_global_pause_status(
         admin_cap: &AdminCap, 
         global_pause_status: &mut GlobalPauseStatus, 
         status: bool,
         ctx: &mut TxContext) {
-        amm_route::set_global_pause_status(
+        amm_router::set_global_pause_status(
             admin_cap,
             global_pause_status, 
             status,
             ctx);
     }
 
-    entry fun set_fee_config<CoinTypeA, CoinTypeB>(
+    public entry fun set_fee_config<CoinTypeA, CoinTypeB>(
         admin_cap: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         trade_fee_numerator: u64,
@@ -159,7 +159,7 @@ module cetus_amm::amm_script {
         protocol_fee_denominator: u64,
         ctx: &mut TxContext
     ) {
-        amm_route::set_fee_config(
+        amm_router::set_fee_config(
             admin_cap,
             pool,
             trade_fee_numerator,
@@ -170,12 +170,12 @@ module cetus_amm::amm_script {
         );
     }
 
-    entry fun claim_fee<CoinTypeA, CoinTypeB>(
+    public entry fun claim_fee<CoinTypeA, CoinTypeB>(
         admin_cap: &AdminCap,
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         ctx: &mut TxContext
     ) {
-        amm_route::claim_fee(
+        amm_router::claim_fee(
             admin_cap,
             pool,
             ctx
