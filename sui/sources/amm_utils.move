@@ -1,9 +1,6 @@
 module cetus_amm::amm_utils {
     use std::debug;
     use cetus_amm::amm_math;
-    use sui::coin::{Coin};
-    use sui::transfer::{transfer};
-    use sui::tx_context::{Self, TxContext};
 
     const EParamInvalid: u64 = 1;
     public fun get_amount_in(
@@ -46,15 +43,11 @@ module cetus_amm::amm_utils {
         amm_math::safe_mul_div_u64(amount_a, reserve_b, reserve_a)
     }
 
-    public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer(c, tx_context::sender(ctx))
-    }
-
     #[test]
     public entry fun test_get_amount_out() {
         let amount_in:u64 = 1000000;
-        let reserve_in: u64 = 151866792;
-        let reserve_out: u64 = 174632594;
+        let reserve_in: u64 = 200006931;
+        let reserve_out: u64 = 201999600;
         let out = get_amount_out(amount_in, reserve_in, reserve_out, 2, 1000);
         debug::print(&out);
         //assert!(out == 196735475, 3004);

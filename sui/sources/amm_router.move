@@ -1,11 +1,12 @@
 module cetus_amm::amm_router {
-    use cetus_amm::amm_swap::{Self, Pool,PoolLiquidityCoin, AdminCap};
+    use cetus_amm::amm_swap::{Self, Pool, PoolLiquidityCoin, AdminCap, FlashSwapReceipt};
     use cetus_amm::amm_config::{Self, GlobalPauseStatus};
     use cetus_amm::amm_utils;
     use sui::coin::{Self,Coin};
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::transfer;
+    use sui::pay;
 
     const ENotEnough: u64 = 1;
     const ESwapOutLessthanExpected: u64 = 2;
@@ -73,7 +74,7 @@ module cetus_amm::amm_router {
             ctx
         );
         assert!(coin::value(&coin_liquidity) > 0, ELiquidityAddLiquidityFailed);
-        amm_utils::keep(coin_liquidity, ctx);
+        pay::keep(coin_liquidity, ctx);
 
         reture_back_or_delete(balance_a, ctx);
         reture_back_or_delete(balance_b, ctx);
@@ -140,8 +141,8 @@ module cetus_amm::amm_router {
 
             assert!(coin::value(&coin_a) >= amount_a_min, ELiquidityInsufficientAAmount);
             assert!(coin::value(&coin_b) >= amount_b_min, ELiquidityInsufficientBAmount);
-            amm_utils::keep(coin_a, ctx);
-            amm_utils::keep(coin_b, ctx);
+            pay::keep(coin_a, ctx);
+            pay::keep(coin_b, ctx);
             reture_back_or_delete(balance_lp, ctx);
         }
 
@@ -178,22 +179,23 @@ module cetus_amm::amm_router {
 
         let b_out = compute_out<CoinTypeA, CoinTypeB>(pool, amount_a_in, true);
         assert!(b_out >= amount_b_out_min, ESwapOutLessthanExpected);
-        let balance_a = coin::into_balance(coin_a);
-        let balance_a_in = balance::split(&mut balance_a, amount_a_in);
-        let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
-            amm_swap::swap_and_emit_event(
-                pool, 
-                balance_a_in, 
-                b_out, 
-                balance::zero(), 
-                0,
-                ctx);
-
+        let (balance_a_out, balance_b_out, swap_receipt) =
+            amm_swap::flash_swap_and_emit_event(
+                pool,
+                amount_a_in,
+                b_out,
+                true,
+                ctx
+            );
         balance::destroy_zero(balance_a_out);
-        amm_utils::keep(coin::from_balance(balance_b_out, ctx), ctx);
-        amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
-        balance::destroy_zero(balance_b_fee);
 
+        let pay_amount = amm_swap::swap_pay_amount(&swap_receipt);
+
+        let balance_a = coin::into_balance(coin_a);
+        let balance_pay = balance::split(&mut balance_a, pay_amount);
+        amm_swap::repay_flash_swap(pool, balance_pay, balance::zero(), swap_receipt);
+
+        pay::keep(coin::from_balance(balance_b_out, ctx), ctx);
         reture_back_or_delete(balance_a, ctx);
     } 
 
@@ -201,32 +203,32 @@ module cetus_amm::amm_router {
         pool: &mut Pool<CoinTypeA, CoinTypeB>,
         pause_status: &GlobalPauseStatus,
         coin_b: Coin<CoinTypeB>,
-        anount_b_in: u64,
+        amount_b_in: u64,
         amount_a_out_min: u64,
         ctx: &mut TxContext
     ) {
-        assert!(coin::value(&coin_b) >= anount_b_in, ENotEnough);
+        assert!(coin::value(&coin_b) >= amount_b_in, ENotEnough);
         amm_config::assert_pause(pause_status);
 
-        let a_out = compute_out(pool, anount_b_in, false);
+        let a_out = compute_out(pool, amount_b_in, false);
         assert!(a_out >= amount_a_out_min, ESwapOutLessthanExpected);
-        let balance_b = coin::into_balance(coin_b);
-        let balance_b_in = balance::split(&mut balance_b, anount_b_in);
-
-        let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
-            amm_swap::swap_and_emit_event(
-                pool, 
-                balance::zero(), 
-                0, 
-                balance_b_in, 
+        let (balance_a_out, balance_b_out, swap_receipt) =
+            amm_swap::flash_swap_and_emit_event(
+                pool,
+                amount_b_in,
                 a_out,
-                ctx);
-
+                false,
+                ctx
+            );
         balance::destroy_zero(balance_b_out);
-        amm_utils::keep(coin::from_balance(balance_a_out, ctx), ctx);
-        amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
-        balance::destroy_zero(balance_a_fee);
 
+        let pay_amount = amm_swap::swap_pay_amount(&swap_receipt);
+
+        let balance_b = coin::into_balance(coin_b);
+        let balance_pay = balance::split(&mut balance_b, pay_amount);
+        amm_swap::repay_flash_swap(pool, balance::zero(), balance_pay, swap_receipt);
+
+        pay::keep(coin::from_balance(balance_a_out, ctx), ctx);
         reture_back_or_delete(balance_b, ctx);
     }
 
@@ -244,23 +246,23 @@ module cetus_amm::amm_router {
         let a_in = compute_in(pool, amount_b_out, true);
         assert!(a_in <= amount_a_max, ESwapInOverLimitMax);
 
-        let balance_a = coin::into_balance(coin_a);
-        let balance_a_in = balance::split(&mut balance_a, a_in);
-
-        let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
-            amm_swap::swap_and_emit_event(
-                pool, 
-                balance_a_in, 
-                amount_b_out, 
-                balance::zero(), 
-                0,
-                ctx);
-
+        let(balance_a_out, balance_b_out, swap_receipt) =
+            amm_swap::flash_swap_and_emit_event(
+                pool,
+                a_in,
+                amount_b_out,
+                true,
+                ctx
+            );
         balance::destroy_zero(balance_a_out);
-        amm_utils::keep(coin::from_balance(balance_b_out, ctx), ctx);
-        amm_swap::handle_swap_protocol_fee(pool, balance_a_fee, balance::zero());
-        balance::destroy_zero(balance_b_fee);
 
+        let pay_amount = amm_swap::swap_pay_amount(&swap_receipt);
+
+        let balance_a = coin::into_balance(coin_a);
+        let balance_pay = balance::split(&mut balance_a, pay_amount);
+        amm_swap::repay_flash_swap(pool, balance_pay, balance::zero(), swap_receipt);
+
+        pay::keep(coin::from_balance(balance_b_out, ctx), ctx);
         reture_back_or_delete(balance_a, ctx);
     }
 
@@ -278,25 +280,62 @@ module cetus_amm::amm_router {
         let b_in = compute_in(pool, amount_a_out, false);
         assert!(b_in <= amount_b_max, ESwapInOverLimitMax);
 
-        let balance_b = coin::into_balance(coin_b);
-        let balance_b_in = balance::split(&mut balance_b, b_in);
-
-        let (balance_a_out, balance_b_out, balance_a_fee, balance_b_fee) = 
-            amm_swap::swap_and_emit_event(
-                pool, 
-                balance::zero(), 
-                0, 
-                balance_b_in, 
-                amount_a_out, 
-                ctx);
-
+        let(balance_a_out, balance_b_out, swap_receipt) =
+            amm_swap::flash_swap_and_emit_event(
+                pool,
+                b_in,
+                amount_a_out,
+                false,
+                ctx
+            );
         balance::destroy_zero(balance_b_out);
-        amm_utils::keep(coin::from_balance(balance_a_out, ctx), ctx);
-        amm_swap::handle_swap_protocol_fee(pool, balance::zero(), balance_b_fee);
-        balance::destroy_zero(balance_a_fee);
 
+        let pay_amount = amm_swap::swap_pay_amount(&swap_receipt);
+
+        let balance_b = coin::into_balance(coin_b);
+        let balance_pay = balance::split(&mut balance_b, pay_amount);
+        amm_swap::repay_flash_swap(pool, balance::zero(), balance_pay, swap_receipt);
+
+        pay::keep(coin::from_balance(balance_a_out, ctx), ctx);
         reture_back_or_delete(balance_b, ctx);
     }
+
+    /// Flash_swap.
+    /// Params
+    ///     - pool
+    ///     - a2b: true --> atob; false --> btoa
+    ///     - by_amount_in: indicate the `amount` parameter is swap in coin amount to be consumed or output amount returned..
+    ///     - amount
+    ///     - ctx
+    /// Returns
+    public fun flash_swap<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        pause_status: &GlobalPauseStatus,
+        a2b: bool,
+        by_amount_in: bool,
+        amount: u64,
+        ctx: &mut TxContext
+    ): (Balance<CoinTypeA>, Balance<CoinTypeB>, FlashSwapReceipt<CoinTypeA, CoinTypeB>) {
+        amm_config::assert_pause(pause_status);
+
+        let (amount_in, amount_out) = if (by_amount_in) {
+            let out = compute_out<CoinTypeA, CoinTypeB>(pool, amount, a2b);
+            (amount, out)
+        } else {
+            let in = compute_in(pool, amount, a2b);
+            (in, amount)
+        };
+
+        amm_swap::flash_swap_and_emit_event(
+            pool,
+            amount_in,
+            amount_out,
+            a2b,
+            ctx
+        )
+    }
+
+
 
     public fun set_global_pause_status(
         _: &AdminCap,

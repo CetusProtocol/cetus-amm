@@ -9,7 +9,7 @@ module cetus_amm::amm_swap {
     use sui::tx_context::{Self, TxContext};
     use cetus_amm::amm_config::{new_global_pause_status_and_shared};
     use cetus_amm::amm_math;
-    use cetus_amm::amm_utils;
+    use sui::pay;
 
     const MINIMUM_LIQUIDITY: u64 = 10;
 
@@ -17,6 +17,8 @@ module cetus_amm::amm_swap {
     const ESwapoutCalcInvalid: u64 = 1;
     const ELiquidityInsufficientMinted: u64 = 2;
     const ELiquiditySwapBurnCalcInvalid: u64 = 3;
+    const EPoolInvalid: u64 = 4;
+    const EAMOUNTINCORRECT: u64 = 5;
 
     struct AdminCap has key {
         id: UID,
@@ -87,6 +89,13 @@ module cetus_amm::amm_swap {
         pool_id: ID,
         amount_a: u64,
         amount_b: u64,
+    }
+
+    struct FlashSwapReceipt<phantom CoinTypeA, phantom CoinTypeB> {
+        pool_id: ID,
+        a2b: bool,
+        pay_amount: u64,
+        protocol_fee_amount: u64,
     }
 
     fun init(ctx: &mut TxContext) {
@@ -165,6 +174,135 @@ module cetus_amm::amm_swap {
 
     public fun get_reserves<CoinTypeA, CoinTypeB>(pool: &Pool<CoinTypeA, CoinTypeB>): (u64, u64) {
         (balance::value(&pool.coin_a), balance::value(&pool.coin_b))
+    }
+
+    public(friend) fun flash_swap_and_emit_event<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        amount_in: u64,
+        amount_out: u64,
+        a2b: bool,
+        ctx: &mut TxContext
+    ): (Balance<CoinTypeA>, Balance<CoinTypeB>, FlashSwapReceipt<CoinTypeA, CoinTypeB>) {
+        let (balance_a_swapped, balance_b_swapped, receipt) = flash_swap(pool, amount_in, amount_out, a2b);
+        if (a2b) {
+            event::emit(SwapEvent{
+                sender: tx_context::sender(ctx),
+                pool_id: object::id(pool),
+                amount_a_in: amount_in,
+                amount_a_out: 0,
+                amount_b_in: 0,
+                amount_b_out: amount_out,
+            });
+        } else {
+            event::emit(SwapEvent{
+                sender: tx_context::sender(ctx),
+                pool_id: object::id(pool),
+                amount_a_in: 0,
+                amount_a_out: amount_out,
+                amount_b_in: amount_in,
+                amount_b_out: 0,
+            });
+        };
+        (balance_a_swapped, balance_b_swapped, receipt)
+    }
+
+    public fun swap_pay_amount<CoinTypeA, CoinTypeB>(receipt: &FlashSwapReceipt<CoinTypeA, CoinTypeB>): u64 {
+        receipt.pay_amount
+    }
+
+    public(friend) fun flash_swap<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        amount_in: u64,
+        amount_out: u64,
+        a2b: bool,
+    ): (Balance<CoinTypeA>, Balance<CoinTypeB>, FlashSwapReceipt<CoinTypeA, CoinTypeB>) {
+        assert!( amount_in > 0, ECoinInsufficient);
+        let (a_reserve, b_reserve) = get_reserves<CoinTypeA, CoinTypeB>(pool);
+        let (fee_numerator, fee_denominator) = get_trade_fee<CoinTypeA, CoinTypeB>(pool);
+
+        let balance_a_swapped = balance::zero<CoinTypeA>();
+        let balance_b_swapped = balance::zero<CoinTypeB>();
+        if (a2b) {
+            balance::join(&mut balance_b_swapped, balance::split(&mut pool.coin_b, amount_out));
+            let a_reserve_new = a_reserve + amount_in;
+            let b_reserve_new = b_reserve - amount_out;
+
+            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
+                a_reserve_new,
+                b_reserve_new,
+                amount_in,
+                0,
+                fee_numerator,
+                fee_denominator);
+
+
+            assert_lp_value_incr(
+                a_reserve,
+                b_reserve,
+                a_adjusted,
+                b_adjusted,
+                fee_denominator
+            );
+        } else {
+            balance::join(&mut balance_a_swapped, balance::split(&mut pool.coin_a, amount_out));
+            let a_reserve_new = a_reserve - amount_out;
+            let b_reserve_new = b_reserve + amount_in;
+
+            let (a_adjusted, b_adjusted) = new_reserves_adjusted(
+                a_reserve_new,
+                b_reserve_new,
+                0,
+                amount_in,
+                fee_numerator,
+                fee_denominator);
+
+            assert_lp_value_incr(
+                a_reserve,
+                b_reserve,
+                a_adjusted,
+                b_adjusted,
+                fee_denominator
+            );
+        };
+
+        let (protocol_fee_numberator, protocol_fee_denominator) = calc_swap_protocol_fee_rate(pool);
+        let protocol_swap_fee = amm_math::safe_mul_div_u64(amount_in, protocol_fee_numberator, protocol_fee_denominator);
+        (balance_a_swapped, balance_b_swapped, FlashSwapReceipt<CoinTypeA, CoinTypeB> {
+            pool_id: object::id(pool),
+            a2b,
+            pay_amount: amount_in,
+            protocol_fee_amount: protocol_swap_fee
+        })
+
+    }
+
+    public(friend) fun repay_flash_swap<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        balance_a: Balance<CoinTypeA>,
+        balance_b: Balance<CoinTypeB>,
+        receipt: FlashSwapReceipt<CoinTypeA, CoinTypeB>
+    ) {
+        let FlashSwapReceipt<CoinTypeA, CoinTypeB> {
+            pool_id,
+            a2b,
+            pay_amount,
+            protocol_fee_amount
+        } = receipt;
+        assert!(pool_id == object::id(pool), EPoolInvalid);
+
+        if (a2b) {
+            assert!(balance::value(&balance_a) == pay_amount, EAMOUNTINCORRECT);
+            let balance_protocol_fee = balance::split(&mut balance_a, protocol_fee_amount);
+            balance::join(&mut pool.coin_a, balance_a);
+            balance::join(&mut pool.coin_a_admin, balance_protocol_fee);
+            balance::destroy_zero(balance_b);
+        } else {
+            assert!(balance::value(&balance_b) == pay_amount, EAMOUNTINCORRECT);
+            let balance_protocol_fee = balance::split(&mut balance_b, protocol_fee_amount);
+            balance::join(&mut pool.coin_b, balance_b);
+            balance::join(&mut pool.coin_b_admin, balance_protocol_fee);
+            balance::destroy_zero(balance_a);
+        }
     }
 
     public(friend) fun swap_and_emit_event<CoinTypeA, CoinTypeB>(
@@ -290,8 +428,8 @@ module cetus_amm::amm_swap {
         let balance_a_fee = balance::split(&mut pool.coin_a_admin, a_fee_value);
         let balance_b_fee = balance::split(&mut pool.coin_b_admin, b_fee_value);
 
-        amm_utils::keep(coin::from_balance(balance_a_fee, ctx), ctx);
-        amm_utils::keep(coin::from_balance(balance_b_fee, ctx), ctx);
+        pay::keep(coin::from_balance(balance_a_fee, ctx), ctx);
+        pay::keep(coin::from_balance(balance_b_fee, ctx), ctx);
 
         event::emit(ClaimFeeEvent{
             sender: tx_context::sender(ctx),
