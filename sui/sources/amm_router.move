@@ -335,6 +335,20 @@ module cetus_amm::amm_router {
         )
     }
 
+    public fun repay_flash_swap<CoinTypeA, CoinTypeB>(
+        pool: &mut Pool<CoinTypeA, CoinTypeB>,
+        balance_a: Balance<CoinTypeA>,
+        balance_b: Balance<CoinTypeB>,
+        receipt: FlashSwapReceipt<CoinTypeA, CoinTypeB>
+    ) {
+        amm_swap::repay_flash_swap(
+            pool,
+            balance_a,
+            balance_b,
+            receipt
+        );
+    }
+
 
 
     public fun set_global_pause_status(
