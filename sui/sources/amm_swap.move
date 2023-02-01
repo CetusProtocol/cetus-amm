@@ -473,7 +473,7 @@ module cetus_amm::amm_swap {
         let total_supply = balance::supply_value(&pool.lp_supply);
         let liquidity: u64;
         if (total_supply == 0) {
-            liquidity = math::sqrt(amount_a * amonut_b) - MINIMUM_LIQUIDITY;
+            liquidity = (math::sqrt_u128((amount_a as u128) * (amonut_b as u128)) as u64) - MINIMUM_LIQUIDITY;
             let balance_lp_locked = balance::increase_supply(&mut pool.lp_supply, MINIMUM_LIQUIDITY);
             balance::join(&mut pool.lp_locked, balance_lp_locked);
         } else {
